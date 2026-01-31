@@ -43,12 +43,15 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
+      - name: List build outputs
+        run: find app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK found"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ndkarte-debug
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
+          if-no-files-found: error
 
       - name: Save build cache
         if: always()
