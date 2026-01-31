@@ -40,6 +40,7 @@ jobs:
       - name: Install NDK
         run: |
           if [ ! -d "/usr/local/lib/android/sdk/ndk/26.1.10909125" ]; then
+            yes | sdkmanager --licenses > /dev/null 2>&1 || true
             sdkmanager --install "ndk;26.1.10909125"
           else
             echo "NDK 26.1.10909125 already present (from cache)"
