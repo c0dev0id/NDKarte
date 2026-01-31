@@ -23,6 +23,8 @@ add_library(native_app_glue STATIC
 target_include_directories(native_app_glue PUBLIC
     ${NATIVE_APP_GLUE_DIR}
 )
+# Suppress warnings for NDK's native_app_glue code (not our code)
+target_compile_options(native_app_glue PRIVATE -w)
 
 # Main application library
 add_library(ndkarte SHARED
