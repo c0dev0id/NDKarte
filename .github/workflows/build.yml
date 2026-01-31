@@ -38,7 +38,12 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install NDK
-        run: sdkmanager --install "ndk;26.1.10909125"
+        run: |
+          if [ ! -d "/usr/local/lib/android/sdk/ndk/26.1.10909125" ]; then
+            sdkmanager --install "ndk;26.1.10909125"
+          else
+            echo "NDK 26.1.10909125 already present (from cache)"
+          fi
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
