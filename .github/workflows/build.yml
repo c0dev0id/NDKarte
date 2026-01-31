@@ -15,16 +15,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Restore Gradle cache
-        id: cache-gradle
+      - name: Restore build cache
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+            ~/.android/build-cache
+            /usr/local/lib/android/sdk/ndk/26.1.10909125
+          key: android-${{ runner.os }}-ndk26-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            gradle-${{ runner.os }}-
+            android-${{ runner.os }}-ndk26-
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,11 +50,13 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
 
-      - name: Save Gradle cache
+      - name: Save build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+            ~/.android/build-cache
+            /usr/local/lib/android/sdk/ndk/26.1.10909125
+          key: android-${{ runner.os }}-ndk26-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
