@@ -24,9 +24,13 @@ jobs:
             ~/.gradle/wrapper
             ~/.android/build-cache
             /usr/local/lib/android/sdk/ndk
-          key: android-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-ndk
+            rust-core/target
+          key: android-rust-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'rust-core/Cargo.toml', 'rust-core/Cargo.lock') }}
           restore-keys: |
-            android-${{ runner.os }}-
+            android-rust-${{ runner.os }}-
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -46,8 +50,23 @@ jobs:
             echo "NDK 26.1.10909125 already present (from cache)"
           fi
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: |
+          if ! command -v cargo-ndk &> /dev/null; then
+            cargo install cargo-ndk
+          else
+            echo "cargo-ndk already present (from cache)"
+          fi
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
 
       - name: List build outputs
         run: find app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK found"
@@ -68,4 +87,8 @@ jobs:
             ~/.gradle/wrapper
             ~/.android/build-cache
             /usr/local/lib/android/sdk/ndk
-          key: android-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-ndk
+            rust-core/target
+          key: android-rust-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'rust-core/Cargo.toml', 'rust-core/Cargo.lock') }}
