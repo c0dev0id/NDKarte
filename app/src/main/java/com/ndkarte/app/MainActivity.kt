@@ -3,6 +3,8 @@ package com.ndkarte.app
 import android.app.Activity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.view.WindowManager
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 
@@ -10,7 +12,8 @@ import org.maplibre.android.maps.MapView
  * Main entry point for NDKarte.
  *
  * Hosts a fullscreen MapLibre MapView in landscape orientation and
- * delegates map lifecycle management to MapManager.
+ * delegates map lifecycle management to MapManager. Keeps the screen
+ * on and uses immersive fullscreen mode for navigation use.
  */
 class MainActivity : Activity() {
 
@@ -21,14 +24,36 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
 
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        enterImmersiveMode()
+
         setContentView(R.layout.activity_main)
 
         mapView = findViewById(R.id.mapView)
-        mapManager = MapManager(mapView)
+        mapManager = MapManager(this, mapView)
         mapView.onCreate(savedInstanceState)
         mapManager.initialize()
 
         Log.i(TAG, "NDKarte started, Rust core version: ${RustBridge.version()}")
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            enterImmersiveMode()
+        }
+    }
+
+    private fun enterImmersiveMode() {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
     }
 
     override fun onStart() {

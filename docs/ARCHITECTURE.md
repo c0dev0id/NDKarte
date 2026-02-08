@@ -54,8 +54,14 @@ through a different frontend.
 ### MapLibre
 
 Handles tile rendering, camera control, gestures, and OpenGL ES
-integration. Configured for offline use via MBTiles vector tile files
-stored on internal storage.
+integration. Configured for offline-only operation:
+
+- Vector tiles loaded from local MBTiles files via `mbtiles://` URI scheme
+- Style JSON template in `assets/styles/offline.json` with OpenMapTiles
+  layer definitions (water, landcover, roads, buildings, places)
+- MBTiles files are read from the app's `files/maps/` directory
+- No network tile fetching — all sources are local
+- Falls back to an empty background style when no tiles are available
 
 ## Data Flow
 

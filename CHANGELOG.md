@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Offline MBTiles vector tile rendering via MapLibre
+- Map style with road hierarchy, water, landcover, buildings, and place labels
+- MBTiles file discovery from app-private storage
+- Immersive fullscreen mode with keep-screen-on for navigation use
+- Map gesture configuration (pan, zoom, rotate, tilt)
+
 ## [0.1.0] - 2026-02-08
 
 ### Added

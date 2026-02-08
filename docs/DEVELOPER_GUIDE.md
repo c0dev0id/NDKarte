@@ -37,8 +37,9 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 | `build.gradle.kts` | App module config, MapLibre dependency, Rust build task |
 | `src/main/AndroidManifest.xml` | App config: landscape, fullscreen, permissions |
 | `src/main/java/com/ndkarte/app/MainActivity.kt` | Activity lifecycle, hosts MapView |
-| `src/main/java/com/ndkarte/app/MapManager.kt` | MapLibre setup, camera, layer management |
+| `src/main/java/com/ndkarte/app/MapManager.kt` | MapLibre setup, offline MBTiles, camera, layers |
 | `src/main/java/com/ndkarte/app/RustBridge.kt` | JNI declarations for rust-core |
+| `src/main/assets/styles/offline.json` | MapLibre style template for offline MBTiles rendering |
 | `src/main/jniLibs/` | Compiled `.so` files from Rust (gitignored, built by Gradle) |
 | `src/main/res/` | Android resources (layouts, strings, icons) |
 
@@ -56,6 +57,19 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 2. Implement the corresponding JNI function in `rust-core/src/android_jni.rs`
    following the naming convention `Java_com_ndkarte_app_RustBridge_<method>`
 3. Rebuild with `./gradlew assembleDebug`
+
+## Offline Map Tiles
+
+The app uses MBTiles files for offline vector tile rendering. To load
+map tiles on a device:
+
+1. Place an OpenMapTiles-schema `.mbtiles` file into the app's internal
+   storage at `files/maps/` (e.g. via `adb push`)
+2. The app picks up the first `.mbtiles` file it finds on startup
+3. The style template `assets/styles/offline.json` defines rendering
+   layers for water, landcover, roads, buildings, and place labels
+
+Without an MBTiles file, the app shows an empty background.
 
 ## Adding a New Rust Module
 
