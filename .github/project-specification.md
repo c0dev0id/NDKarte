@@ -2,8 +2,6 @@
 
 High Performance Navigation System
 
-A native Android navigation application built with C/C++ using the Android NDK
-
 **Target Audience**
 - Motocycle Riders
 
