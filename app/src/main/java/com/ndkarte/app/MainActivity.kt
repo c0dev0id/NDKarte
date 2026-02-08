@@ -7,13 +7,14 @@ import android.view.View
 import android.view.WindowManager
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
+import java.io.File
 
 /**
  * Main entry point for NDKarte.
  *
  * Hosts a fullscreen MapLibre MapView in landscape orientation and
- * delegates map lifecycle management to MapManager. Keeps the screen
- * on and uses immersive fullscreen mode for navigation use.
+ * delegates map lifecycle management to MapManager. Loads GPX files
+ * from app-private storage and renders them on the map.
  */
 class MainActivity : Activity() {
 
@@ -34,7 +35,34 @@ class MainActivity : Activity() {
         mapView.onCreate(savedInstanceState)
         mapManager.initialize()
 
+        loadGpxFiles()
+
         Log.i(TAG, "NDKarte started, Rust core version: ${RustBridge.version()}")
+    }
+
+    /**
+     * Scan the app's files/gpx/ directory for GPX files and render
+     * the first one found on the map.
+     */
+    private fun loadGpxFiles() {
+        val gpxDir = File(filesDir, GPX_DIR)
+        if (!gpxDir.isDirectory) {
+            gpxDir.mkdirs()
+            return
+        }
+
+        val gpxFile = gpxDir.listFiles()
+            ?.filter { it.extension == "gpx" }
+            ?.firstOrNull()
+            ?: return
+
+        Log.i(TAG, "Loading GPX: ${gpxFile.name}")
+        val data = GpxData.parse(gpxFile.readBytes())
+        if (data != null) {
+            mapManager.showGpxData(data)
+            Log.i(TAG, "GPX loaded: ${data.tracks.size} tracks, " +
+                "${data.routes.size} routes, ${data.waypoints.size} waypoints")
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -93,5 +121,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "NDKarte"
+        private const val GPX_DIR = "gpx"
     }
 }

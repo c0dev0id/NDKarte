@@ -14,4 +14,14 @@ object RustBridge {
 
     /** Returns the rust-core library version string. */
     external fun version(): String
+
+    /**
+     * Parse a GPX file from raw bytes.
+     *
+     * Returns a JSON string with the structure:
+     * { "tracks": [...], "routes": [...], "waypoints": [...] }
+     *
+     * On failure returns: { "error": "description" }
+     */
+    external fun parseGpx(data: ByteArray): String
 }

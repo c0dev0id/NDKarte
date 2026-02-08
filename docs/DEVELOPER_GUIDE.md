@@ -38,6 +38,7 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 | `src/main/AndroidManifest.xml` | App config: landscape, fullscreen, permissions |
 | `src/main/java/com/ndkarte/app/MainActivity.kt` | Activity lifecycle, hosts MapView |
 | `src/main/java/com/ndkarte/app/MapManager.kt` | MapLibre setup, offline MBTiles, camera, layers |
+| `src/main/java/com/ndkarte/app/GpxData.kt` | GPX data model and JSON deserialization |
 | `src/main/java/com/ndkarte/app/RustBridge.kt` | JNI declarations for rust-core |
 | `src/main/assets/styles/offline.json` | MapLibre style template for offline MBTiles rendering |
 | `src/main/jniLibs/` | Compiled `.so` files from Rust (gitignored, built by Gradle) |
@@ -49,6 +50,7 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 |------|---------|
 | `Cargo.toml` | Rust project config, dependencies |
 | `src/lib.rs` | Library root, module declarations |
+| `src/gpx.rs` | GPX 1.1 parsing (tracks, routes, waypoints) |
 | `src/android_jni.rs` | JNI function implementations matching RustBridge.kt |
 
 ## Adding a New JNI Function
@@ -70,6 +72,30 @@ map tiles on a device:
    layers for water, landcover, roads, buildings, and place labels
 
 Without an MBTiles file, the app shows an empty background.
+
+## GPX Files
+
+GPX files are parsed by the Rust core and rendered on the map. To load
+a GPX file on a device:
+
+1. Place a GPX 1.1 file into the app's internal storage at `files/gpx/`
+   (e.g. via `adb push`)
+2. The app loads the first `.gpx` file it finds on startup
+3. Tracks are rendered as blue polylines, routes as orange dashed lines,
+   and waypoints as red circles
+
+The parsing pipeline: file bytes -> `RustBridge.parseGpx()` (JNI) ->
+Rust `gpx` crate -> JSON -> `GpxData` Kotlin data classes -> GeoJSON
+MapLibre layers.
+
+### Running Rust Tests
+
+```sh
+cd rust-core && cargo test
+```
+
+The `gpx` module includes unit tests for track/route/waypoint parsing,
+multi-segment tracks, missing elevation, empty files, and invalid input.
 
 ## Adding a New Rust Module
 

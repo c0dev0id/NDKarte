@@ -65,12 +65,21 @@ integration. Configured for offline-only operation:
 
 ## Data Flow
 
-1. GPX files are parsed by `rust-core` and returned to Kotlin as
-   structured data
-2. Kotlin passes track/route geometries to `MapManager` for rendering
-   as MapLibre layers
-3. Navigation state (position on track, next turn) is computed in Rust
-   and pushed to the UI via JNI callbacks
+### GPX File Loading
+
+1. `MainActivity` scans `files/gpx/` for `.gpx` files
+2. File bytes are passed to `RustBridge.parseGpx()` (JNI call)
+3. Rust `gpx` crate parses the XML and returns JSON via JNI
+4. `GpxData.fromJson()` deserializes into Kotlin data classes
+5. `MapManager.showGpxData()` converts to GeoJSON and adds MapLibre
+   layers (blue polylines for tracks, orange dashed for routes,
+   red circles for waypoints)
+6. Camera is adjusted to fit the GPX bounds
+
+### Navigation (future)
+
+Navigation state (position on track, next turn) will be computed in
+Rust and pushed to the UI via JNI callbacks.
 
 ## Build Pipeline
 

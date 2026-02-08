@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - MBTiles file discovery from app-private storage
 - Immersive fullscreen mode with keep-screen-on for navigation use
 - Map gesture configuration (pan, zoom, rotate, tilt)
+- GPX 1.1 file parsing in Rust (tracks, routes, waypoints)
+- GPX track/route/waypoint rendering as MapLibre overlay layers
+- Automatic GPX file loading from app-private storage
 
 ## [0.1.0] - 2026-02-08
 
