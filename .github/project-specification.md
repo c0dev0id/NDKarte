@@ -55,7 +55,7 @@ High Performance Navigation System
   - Metadata: JSON file tracking sync state
 - Build System
   - Gradle (Kotlin DSL)
-    - Rust integration: Custom task or gradle-cargo plugin
+    - Rust integration via Custom Task
     - Compiles: .so libraries from Rust -> bundles into APK
     - Dependencies: Maven Central for MapLibre, Google APIs
 
