@@ -20,22 +20,31 @@ A list of available software for OpenBSD can be found here:
 
 # The Users Preferences (can be overruled if there is a good reason)
 
-Programming Language Preferences:
+**Programming Language Preferences**
 - prefer for scripting: shell, python, perl
 - prefer for programming: C, golang, rust
 - prefer to use languages already used in the project
 
-Library and Framework Selection Preference:
+**Library and Framework Selection Preference**
 - prefer small libraries and frameworks over big ones
 - prefer well established libraries and frameworks over niche solutions
 - prefer to use the highest available version
 
-Code Quality Preferences:
+**Code Quality Preferences**
 - prefer simple solutions over complex ones
 - prefer performance over convenience
 - prefer performance over memory footprint
 - prefer offline over online
 - prefer using existing libraries and frameworks over introducing new ones
+
+**Language Specific Preferences**
+- C Programming Language
+  - Use the C99 Standard
+  - Use the KNF Coding Style: https://man.openbsd.org/style.9
+- Shell Scripting (sh, bash)
+  - Use the POSIX sh standard (Exception. $( .. ) instead of backticks)
+- Build Systems
+  - Prefer BSD make if there is no language specific build system
 
 # Forbidden Software (with reason)
 - electron: no OpenBSD support
@@ -218,6 +227,15 @@ The following rules must serve this purpose:
   - Good and easy to understand language
   - Does not contain technical information
   - Target audience: End Users
+- /CHANGELOG.md
+  - Maintain the changelog file according to "Keep A Changelog": https://keepachangelog.com
+  - Use Semantic Versioning: https://semver.org
+  - Brief and professional language
+  - List features and changes, not commits
+  - Skip documentation changes
+  - Skip minimal changes (typos, renames, etc..)
+  - Add big refactorings
+  - Add dependency changes
 
 **General rules for all documents**
 - Do not create any extra documentation files
