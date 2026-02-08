@@ -75,6 +75,11 @@ NDKarte/
 ├── app/
 │   ├── src/
 │   │   ├── main/
+│   │   ├── res/                  # Android resources
+│   │   │── AndroidManifest.xml   # App configuration
+│   │   ├── cpp/
+│   │   │   ├── CMakeLists.txt    # Native build configuration
+│   │   │   │── main.c            # Application entry point
 │   │   │   ├── java/com/yourapp/
 │   │   │   │   ├── MainActivity.kt
 │   │   │   │   ├── RustBridge.kt
@@ -87,20 +92,13 @@ NDKarte/
 │   │   │   └── AndroidManifest.xml
 │   │   └── rust/                 # Rust source (optional location)
 │   └── build.gradle.kts
-└── rust-core/                    # Shared Rust library
-    ├── src/
-    │   ├── lib.rs
-    │   ├── gpx.rs
-    │   └── android_jni.rs        # Android JNI bindings
-    └── Cargo.toml
-NDKarte/
-├── app/
-│   └── src/main/
-│       ├── cpp/
-│       │   ├── CMakeLists.txt    # Native build configuration
-│       │   └── main.c            # Application entry point
-│       ├── res/                  # Android resources
-│       └── AndroidManifest.xml   # App configuration
+├── rust-core/                    # Shared Rust library
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── gpx.rs
+│   │   └── android_jni.rs        # Android JNI bindings
+│   └── Cargo.toml
 ├── build.gradle.kts              # Root build script
 └── settings.gradle.kts           # Gradle settings
 ```
+
