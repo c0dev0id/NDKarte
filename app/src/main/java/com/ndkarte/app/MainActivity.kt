@@ -1,6 +1,8 @@
 package com.ndkarte.app
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -14,12 +16,17 @@ import java.io.File
  *
  * Hosts a fullscreen MapLibre MapView in landscape orientation and
  * delegates map lifecycle management to MapManager. Loads GPX files
- * from app-private storage and renders them on the map.
+ * from app-private storage, renders them on the map, and starts
+ * track navigation with GPS positioning and TTS guidance.
  */
 class MainActivity : Activity() {
 
     private lateinit var mapView: MapView
     private lateinit var mapManager: MapManager
+    private lateinit var locationProvider: LocationProvider
+    private lateinit var navigationManager: NavigationManager
+
+    private var pendingGpxData: GpxData? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,10 +39,16 @@ class MainActivity : Activity() {
 
         mapView = findViewById(R.id.mapView)
         mapManager = MapManager(this, mapView)
+        locationProvider = LocationProvider(this)
+        navigationManager = NavigationManager(this, locationProvider)
         mapView.onCreate(savedInstanceState)
-        mapManager.initialize()
+        mapManager.initialize { map, style ->
+            navigationManager.bind(map, style)
+            startNavigationIfReady()
+        }
 
         loadGpxFiles()
+        requestLocationPermission()
 
         Log.i(TAG, "NDKarte started, Rust core version: ${RustBridge.version()}")
     }
@@ -60,9 +73,54 @@ class MainActivity : Activity() {
         val data = GpxData.parse(gpxFile.readBytes())
         if (data != null) {
             mapManager.showGpxData(data)
+            pendingGpxData = data
             Log.i(TAG, "GPX loaded: ${data.tracks.size} tracks, " +
                 "${data.routes.size} routes, ${data.waypoints.size} waypoints")
         }
+    }
+
+    private fun requestLocationPermission() {
+        if (locationProvider.hasPermission()) {
+            startNavigationIfReady()
+            return
+        }
+
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+            LOCATION_PERMISSION_REQUEST
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST) {
+            if (grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.i(TAG, "Location permission granted")
+                startNavigationIfReady()
+            } else {
+                Log.w(TAG, "Location permission denied")
+            }
+        }
+    }
+
+    /**
+     * Start navigation on the first track if GPS permission is granted,
+     * the map is ready, and GPX data has been loaded.
+     */
+    private fun startNavigationIfReady() {
+        if (!locationProvider.hasPermission()) return
+        if (navigationManager.isNavigating) return
+
+        val data = pendingGpxData ?: return
+        val track = data.tracks.firstOrNull() ?: return
+
+        navigationManager.startNavigation(track)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -105,6 +163,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        navigationManager.stopNavigation()
         super.onDestroy()
         mapView.onDestroy()
     }
@@ -122,5 +181,6 @@ class MainActivity : Activity() {
     companion object {
         private const val TAG = "NDKarte"
         private const val GPX_DIR = "gpx"
+        private const val LOCATION_PERMISSION_REQUEST = 1001
     }
 }

@@ -14,6 +14,12 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 |  +-------------+   +------------+   | MapView   |  |
 |        |                            +-----------+  |
 |        v                                           |
+|  +-----------------+  +------------------+         |
+|  | NavigationMgr   |  | LocationProvider |         |
+|  | (drag-line, TTS)|  | (GPS updates)    |         |
+|  +--------+--------+  +------------------+         |
+|           |                                        |
+|           v                                        |
 |  +-------------+                                   |
 |  | RustBridge  |  (JNI)                            |
 |  +------+------+                                   |
@@ -22,11 +28,14 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 +---------------------------------------------------+
 |              rust-core (libndkarte.so)             |
 |                                                    |
-|  +-------------+  +----------+  +--------------+   |
-|  | android_jni |  | gpx      |  | (future:     |   |
-|  | (JNI entry) |  | (parser) |  |  routing,    |   |
-|  +-------------+  +----------+  |  sync, map   |   |
-|                                 |  matching)   |   |
+|  +-------------+  +----------+  +----------+       |
+|  | android_jni |  | gpx      |  | nav      |       |
+|  | (JNI entry) |  | (parser) |  | (project)|       |
+|  +-------------+  +----------+  +----------+       |
+|                   +----------+  +--------------+   |
+|                   | convert  |  | (future:     |   |
+|                   | (rdp)    |  |  sync, map   |   |
+|                   +----------+  |  matching)   |   |
 |                                 +--------------+   |
 +---------------------------------------------------+
 ```
@@ -37,6 +46,10 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 
 `MainActivity` owns the Android lifecycle and hosts the MapLibre `MapView`.
 `MapManager` encapsulates all map interaction (camera, gestures, overlays).
+`NavigationManager` ties GPS positioning to track projection and renders
+the drag-line overlay. It also manages TTS voice guidance for off-track
+warnings and arrival announcements.
+`LocationProvider` wraps Android `LocationManager` for GPS updates.
 `RustBridge` provides JNI declarations that load and call into `libndkarte.so`.
 
 The Kotlin layer is intentionally thin. It handles what requires Android
@@ -76,10 +89,26 @@ integration. Configured for offline-only operation:
    red circles for waypoints)
 6. Camera is adjusted to fit the GPX bounds
 
-### Navigation (future)
+### Track Navigation
 
-Navigation state (position on track, next turn) will be computed in
-Rust and pushed to the UI via JNI callbacks.
+1. `LocationProvider` delivers GPS position updates (1 Hz, 5 m filter)
+2. `NavigationManager.onLocationUpdate()` serializes the active track
+   points to JSON and calls `RustBridge.projectOnTrack()`
+3. Rust `nav::project_on_track()` finds the nearest point on the track
+   using segment projection with latitude-cosine planar approximation
+4. The result (projected point, segment index, distance, distance along)
+   is returned as JSON and parsed on the Kotlin side
+5. `NavigationManager` updates three MapLibre layers:
+   - Rider position (blue circle)
+   - Drag-line (dashed red line from rider to projected point)
+   - Projected point (white circle on track)
+6. TTS announces off-track warnings (>100 m, >500 m) and arrival
+
+### Route/Track Conversion
+
+- `RustBridge.trackToRoute()` simplifies a track to sparse waypoints
+  using Ramer-Douglas-Peucker with configurable tolerance
+- `RustBridge.routeToTrack()` copies route waypoints as track points
 
 ## Build Pipeline
 

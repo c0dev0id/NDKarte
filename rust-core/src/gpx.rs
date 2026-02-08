@@ -4,11 +4,11 @@
 //! into serializable structures that can cross the JNI boundary as JSON
 //! or be used directly by a non-Android frontend.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::Read;
 
 /// A geographic coordinate with optional elevation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Point {
     pub lat: f64,
     pub lon: f64,
@@ -17,7 +17,7 @@ pub struct Point {
 }
 
 /// A named sequence of points representing a recorded path.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -25,7 +25,7 @@ pub struct Track {
 }
 
 /// A named sequence of points representing a planned route.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Route {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -33,7 +33,7 @@ pub struct Route {
 }
 
 /// A single named point of interest.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Waypoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -41,7 +41,7 @@ pub struct Waypoint {
 }
 
 /// All data extracted from a GPX file.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GpxData {
     pub tracks: Vec<Track>,
     pub routes: Vec<Route>,

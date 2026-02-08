@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - GPX 1.1 file parsing in Rust (tracks, routes, waypoints)
 - GPX track/route/waypoint rendering as MapLibre overlay layers
 - Automatic GPX file loading from app-private storage
+- GPS location provider with runtime permission handling
+- Track navigation with nearest-point projection (Rust nav module)
+- Drag-line rendering from rider position to nearest track point
+- Route/track conversion with Ramer-Douglas-Peucker simplification
+- Text-to-speech guidance (off-track warnings, arrival announcements)
+- JNI bindings for projectOnTrack, trackToRoute, routeToTrack
 
 ## [0.1.0] - 2026-02-08
 

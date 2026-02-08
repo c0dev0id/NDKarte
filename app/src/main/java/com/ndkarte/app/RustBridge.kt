@@ -24,4 +24,30 @@ object RustBridge {
      * On failure returns: { "error": "description" }
      */
     external fun parseGpx(data: ByteArray): String
+
+    /**
+     * Project a position onto a track and return the nearest point.
+     *
+     * [trackJson] is a JSON array of {lat, lon, ele?} objects.
+     * Returns JSON: { "point": {}, "segment_index": N,
+     *   "distance_m": N, "distance_along_m": N }
+     */
+    external fun projectOnTrack(lat: Double, lon: Double, trackJson: String): String
+
+    /**
+     * Simplify a track to a route using Ramer-Douglas-Peucker.
+     *
+     * [trackJson]: { "name"?: str, "points": [{lat, lon, ele?}] }
+     * [toleranceM]: simplification tolerance in meters.
+     * Returns: { "name"?: str, "points": [{lat, lon, ele?}] }
+     */
+    external fun trackToRoute(trackJson: String, toleranceM: Double): String
+
+    /**
+     * Convert a route to a track (direct point copy).
+     *
+     * [routeJson]: { "name"?: str, "points": [{lat, lon, ele?}] }
+     * Returns: { "name"?: str, "points": [{lat, lon, ele?}] }
+     */
+    external fun routeToTrack(routeJson: String): String
 }

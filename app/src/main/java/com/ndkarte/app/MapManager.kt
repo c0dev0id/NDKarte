@@ -32,8 +32,11 @@ class MapManager(private val context: Context, private val mapView: MapView) {
     /**
      * Initialize the map with offline MBTiles tiles if available,
      * or fall back to an empty style with just a background layer.
+     *
+     * The optional [onReady] callback is invoked once the map and style
+     * are fully loaded, providing access to the map and style objects.
      */
-    fun initialize() {
+    fun initialize(onReady: ((MapLibreMap, Style) -> Unit)? = null) {
         mapView.getMapAsync { mapLibreMap ->
             map = mapLibreMap
             configureUiSettings(mapLibreMap)
@@ -42,6 +45,7 @@ class MapManager(private val context: Context, private val mapView: MapView) {
             mapLibreMap.setStyle(styleJson) { loadedStyle ->
                 style = loadedStyle
                 Log.i(TAG, "Style loaded")
+                onReady?.invoke(mapLibreMap, loadedStyle)
             }
 
             mapLibreMap.cameraPosition = CameraPosition.Builder()
