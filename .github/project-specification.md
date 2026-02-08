@@ -61,6 +61,14 @@ A native Android navigation application built with C/C++ using the Android NDK
     - Compiles: .so libraries from Rust -> bundles into APK
     - Dependencies: Maven Central for MapLibre, Google APIs
 
+Note:
+- The project will be built with Github Actions on Ubuntu
+- A companion Application will be developed for OpenBSD (not in scope)
+  - When choosing frameworks and libraries, prefer OpenBSD compatible options
+  - The companion app should be able to reuse rust code in respect to:
+    - Map Provider
+    - Map Engine
+    - Routing logic
 
 ## Target File Structure
 
