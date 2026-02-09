@@ -147,3 +147,34 @@ pub extern "system" fn Java_com_ndkarte_app_RustBridge_routeToTrack(
     })();
     json_result(&mut env, result)
 }
+
+// -- Route Navigation --
+
+/// Generate turn-by-turn instructions for a route.
+///
+/// Maps to: RustBridge.generateInstructions(routePointsJson) -> String
+///
+/// routePointsJson: JSON array of {lat, lon, ele?} objects.
+/// Returns: JSON array of instruction objects.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_ndkarte_app_RustBridge_generateInstructions(
+    mut env: JNIEnv,
+    _class: JClass,
+    route_points_json: JString,
+) -> jstring {
+    let result = (|| {
+        let json_str: String = env
+            .get_string(&route_points_json)
+            .map_err(|e| format!("JNI string conversion failed: {e}"))?
+            .into();
+
+        let points: Vec<Point> = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Route points JSON parse failed: {e}"))?;
+
+        let instructions = crate::route_nav::generate_instructions(&points);
+
+        serde_json::to_string(&instructions)
+            .map_err(|e| format!("JSON serialize failed: {e}"))
+    })();
+    json_result(&mut env, result)
+}

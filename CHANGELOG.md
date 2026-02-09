@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - JNI bindings for projectOnTrack, trackToRoute, routeToTrack
 - Google Drive sync for GPX files (OAuth 2.0 via Google Sign-In)
 - Sync state metadata tracking (JSON file, upload/download delta sync)
+- Interactive route editor (tap to add waypoints, undo, clear, GPX export)
+- Custom waypoint icons via GPX `<sym>` element (fuel, food, hotel, photo, danger, info)
+- Route navigation with turn-by-turn TTS instructions (Rust route_nav module)
+- Turn classification (straight, slight/sharp left/right, U-turn, arrive)
+- JNI binding for generateInstructions
 
 ## [0.1.0] - 2026-02-08
 

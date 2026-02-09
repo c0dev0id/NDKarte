@@ -26,7 +26,8 @@ data class GpxRoute(
 
 data class GpxWaypoint(
     val name: String?,
-    val point: GpxPoint
+    val point: GpxPoint,
+    val icon: String? = null
 )
 
 data class GpxData(
@@ -83,7 +84,8 @@ data class GpxData(
                             lat = p.getDouble("lat"),
                             lon = p.getDouble("lon"),
                             ele = if (p.has("ele")) p.getDouble("ele") else null
-                        )
+                        ),
+                        icon = w.optString("icon", null)
                     )
                 }
 

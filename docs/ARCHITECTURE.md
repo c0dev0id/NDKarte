@@ -32,11 +32,10 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 |  | android_jni |  | gpx      |  | nav      |       |
 |  | (JNI entry) |  | (parser) |  | (project)|       |
 |  +-------------+  +----------+  +----------+       |
-|                   +----------+  +--------------+   |
-|                   | convert  |  | (future:     |   |
-|                   | (rdp)    |  |  sync, map   |   |
-|                   +----------+  |  matching)   |   |
-|                                 +--------------+   |
+|                   +----------+  +----------+       |
+|                   | convert  |  | route_nav|       |
+|                   | (rdp)    |  | (TBT)    |       |
+|                   +----------+  +----------+       |
 +---------------------------------------------------+
 ```
 
@@ -50,6 +49,10 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 the drag-line overlay. It also manages TTS voice guidance for off-track
 warnings and arrival announcements.
 `LocationProvider` wraps Android `LocationManager` for GPS updates.
+`RouteEditor` provides interactive route creation on the map (tap to add
+waypoints, undo, clear, GPX export).
+`RouteNavigator` drives turn-by-turn route navigation with TTS announcements,
+using Rust-generated instructions.
 `SyncManager` handles Google Drive integration: OAuth 2.0 sign-in, GPX
 file upload/download, and sync state tracking via a local JSON metadata file.
 `RustBridge` provides JNI declarations that load and call into `libndkarte.so`.
@@ -111,6 +114,29 @@ integration. Configured for offline-only operation:
 - `RustBridge.trackToRoute()` simplifies a track to sparse waypoints
   using Ramer-Douglas-Peucker with configurable tolerance
 - `RustBridge.routeToTrack()` copies route waypoints as track points
+
+### Route Navigation (Turn-by-Turn)
+
+1. Route waypoints are sent to `RustBridge.generateInstructions()`
+2. Rust `route_nav::generate_instructions()` computes bearing changes
+   between consecutive waypoints and classifies each as a turn type
+3. Instructions (start, straight, slight/left/right/sharp turns, arrive)
+   are returned as JSON and parsed into `InstructionData` objects
+4. `RouteNavigator` monitors GPS position and announces upcoming turns
+   via TTS when the rider approaches each waypoint (within 200 m)
+
+### Route Editor
+
+1. `RouteEditor.startEditing()` registers a map click listener
+2. Each tap adds a waypoint and updates the GeoJSON line + circle layers
+3. The route can be exported as GPX 1.1 XML via `toGpxXml()`
+
+### Custom Waypoint Icons
+
+Waypoints use the standard GPX `<sym>` element for icon categorization.
+Supported symbols: `fuel`, `food`, `hotel`, `photo`, `danger`, `info`.
+Each renders with a distinct color on the MapLibre circle layer using a
+`match` expression on the GeoJSON `icon` property.
 
 ### Google Drive Sync
 

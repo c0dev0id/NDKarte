@@ -138,15 +138,30 @@ class MapManager(private val context: Context, private val mapView: MapView) {
 
         val features = JSONArray()
         for (wpt in waypoints) {
-            features.put(pointFeature(wpt.point, wpt.name))
+            val feature = pointFeature(wpt.point, wpt.name)
+            feature.getJSONObject("properties").apply {
+                if (wpt.icon != null) put("icon", wpt.icon)
+            }
+            features.put(feature)
         }
 
         val geojson = featureCollection(features)
         style.addSource(GeoJsonSource(WAYPOINT_SOURCE_ID, geojson.toString()))
         style.addLayer(
             CircleLayer(WAYPOINT_LAYER_ID, WAYPOINT_SOURCE_ID).withProperties(
-                PropertyFactory.circleColor(Color.parseColor(WAYPOINT_COLOR)),
-                PropertyFactory.circleRadius(6f),
+                PropertyFactory.circleColor(
+                    org.maplibre.android.style.expressions.Expression.match(
+                        org.maplibre.android.style.expressions.Expression.get("icon"),
+                        org.maplibre.android.style.expressions.Expression.literal(WAYPOINT_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("fuel", ICON_FUEL_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("food", ICON_FOOD_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("hotel", ICON_HOTEL_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("photo", ICON_PHOTO_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("danger", ICON_DANGER_COLOR),
+                        org.maplibre.android.style.expressions.Expression.stop("info", ICON_INFO_COLOR)
+                    )
+                ),
+                PropertyFactory.circleRadius(7f),
                 PropertyFactory.circleStrokeColor(Color.WHITE),
                 PropertyFactory.circleStrokeWidth(2f)
             )
@@ -234,6 +249,14 @@ class MapManager(private val context: Context, private val mapView: MapView) {
         private const val WAYPOINT_SOURCE_ID = "gpx-waypoints"
         private const val WAYPOINT_LAYER_ID = "gpx-waypoints-layer"
         private const val WAYPOINT_COLOR = "#F44336"
+
+        // Custom waypoint icon colors keyed by GPX <sym> values
+        private const val ICON_FUEL_COLOR = "#FF9800"
+        private const val ICON_FOOD_COLOR = "#8BC34A"
+        private const val ICON_HOTEL_COLOR = "#9C27B0"
+        private const val ICON_PHOTO_COLOR = "#00BCD4"
+        private const val ICON_DANGER_COLOR = "#F44336"
+        private const val ICON_INFO_COLOR = "#2196F3"
 
         private const val EMPTY_STYLE = """
             {

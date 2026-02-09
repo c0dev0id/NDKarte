@@ -50,4 +50,13 @@ object RustBridge {
      * Returns: { "name"?: str, "points": [{lat, lon, ele?}] }
      */
     external fun routeToTrack(routeJson: String): String
+
+    /**
+     * Generate turn-by-turn instructions for a route.
+     *
+     * [routePointsJson]: JSON array of {lat, lon, ele?} objects.
+     * Returns: JSON array of instruction objects with waypoint_index,
+     *   distance_m, turn, and text fields.
+     */
+    external fun generateInstructions(routePointsJson: String): String
 }

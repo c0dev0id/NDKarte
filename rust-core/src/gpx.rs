@@ -33,11 +33,17 @@ pub struct Route {
 }
 
 /// A single named point of interest.
+///
+/// The `icon` field is populated from the GPX `<sym>` element, which is
+/// the standard GPX 1.1 mechanism for waypoint symbols. NDKarte uses
+/// this for custom waypoint icon rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Waypoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub point: Point,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 /// All data extracted from a GPX file.
@@ -105,6 +111,7 @@ pub fn parse<R: Read>(reader: R) -> Result<GpxData, String> {
                 lon: wp.point().x(),
                 ele: wp.elevation,
             },
+            icon: wp.symbol.clone(),
         })
         .collect();
 
@@ -149,6 +156,7 @@ mod tests {
   <wpt lat="48.2082" lon="16.3738">
     <name>Vienna</name>
     <ele>171</ele>
+    <sym>fuel</sym>
   </wpt>
 </gpx>"#;
 
@@ -182,6 +190,7 @@ mod tests {
         assert_eq!(data.waypoints.len(), 1);
         assert_eq!(data.waypoints[0].name.as_deref(), Some("Vienna"));
         assert!((data.waypoints[0].point.lat - 48.2082).abs() < 1e-6);
+        assert_eq!(data.waypoints[0].icon.as_deref(), Some("fuel"));
     }
 
     #[test]
