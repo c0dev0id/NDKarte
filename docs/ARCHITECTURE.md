@@ -19,10 +19,10 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 |  | (drag-line, TTS)|  | (GPS updates)    |         |
 |  +--------+--------+  +------------------+         |
 |           |                                        |
-|           v                                        |
-|  +-------------+                                   |
-|  | RustBridge  |  (JNI)                            |
-|  +------+------+                                   |
+|           v            +------------------+        |
+|  +-------------+       | SyncManager      |        |
+|  | RustBridge  | (JNI) | (Google Drive)   |        |
+|  +------+------+       +------------------+        |
 +---------|-----------------------------------------+
           v
 +---------------------------------------------------+
@@ -50,11 +50,13 @@ a Kotlin UI shell, a Rust core library, and MapLibre for map rendering.
 the drag-line overlay. It also manages TTS voice guidance for off-track
 warnings and arrival announcements.
 `LocationProvider` wraps Android `LocationManager` for GPS updates.
+`SyncManager` handles Google Drive integration: OAuth 2.0 sign-in, GPX
+file upload/download, and sync state tracking via a local JSON metadata file.
 `RustBridge` provides JNI declarations that load and call into `libndkarte.so`.
 
 The Kotlin layer is intentionally thin. It handles what requires Android
-SDK access: activity lifecycle, permissions, text-to-speech, and view
-management.
+SDK access: activity lifecycle, permissions, text-to-speech, Google APIs,
+and view management.
 
 ### Rust Core (rust-core/)
 
@@ -109,6 +111,17 @@ integration. Configured for offline-only operation:
 - `RustBridge.trackToRoute()` simplifies a track to sparse waypoints
   using Ramer-Douglas-Peucker with configurable tolerance
 - `RustBridge.routeToTrack()` copies route waypoints as track points
+
+### Google Drive Sync
+
+1. `SyncManager.initialize()` sets up Google Sign-In client and attempts
+   silent sign-in using the last signed-in account
+2. When signed in, `sync()` runs on a background thread:
+   - Creates/finds a `NDKarte` folder in the user's Drive
+   - Lists remote `.gpx` files and compares with local `files/gpx/`
+   - Downloads new/updated remote files; uploads new/updated local files
+   - Updates `sync_state.json` with file IDs and modification timestamps
+3. After sync, `MainActivity` reloads GPX files if any were downloaded
 
 ## Build Pipeline
 

@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - Route/track conversion with Ramer-Douglas-Peucker simplification
 - Text-to-speech guidance (off-track warnings, arrival announcements)
 - JNI bindings for projectOnTrack, trackToRoute, routeToTrack
+- Google Drive sync for GPX files (OAuth 2.0 via Google Sign-In)
+- Sync state metadata tracking (JSON file, upload/download delta sync)
 
 ## [0.1.0] - 2026-02-08
 
