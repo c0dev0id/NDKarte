@@ -11,6 +11,7 @@ import android.view.WindowManager
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * Main entry point for NDKarte.
@@ -29,6 +30,7 @@ class MainActivity : Activity() {
     private lateinit var navigationManager: NavigationManager
     private lateinit var syncManager: SyncManager
 
+    private val ioExecutor = Executors.newSingleThreadExecutor()
     private var pendingGpxData: GpxData? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,27 +63,32 @@ class MainActivity : Activity() {
 
     /**
      * Scan the app's files/gpx/ directory for GPX files and render
-     * the first one found on the map.
+     * the first one found on the map. File I/O and Rust parsing
+     * run on a background thread to keep the UI fluid.
      */
     private fun loadGpxFiles() {
-        val gpxDir = File(filesDir, GPX_DIR)
-        if (!gpxDir.isDirectory) {
-            gpxDir.mkdirs()
-            return
-        }
+        ioExecutor.execute {
+            val gpxDir = File(filesDir, GPX_DIR)
+            if (!gpxDir.isDirectory) {
+                gpxDir.mkdirs()
+                return@execute
+            }
 
-        val gpxFile = gpxDir.listFiles()
-            ?.filter { it.extension == "gpx" }
-            ?.firstOrNull()
-            ?: return
+            val gpxFile = gpxDir.listFiles()
+                ?.filter { it.extension == "gpx" }
+                ?.firstOrNull()
+                ?: return@execute
 
-        Log.i(TAG, "Loading GPX: ${gpxFile.name}")
-        val data = GpxData.parse(gpxFile.readBytes())
-        if (data != null) {
-            mapManager.showGpxData(data)
-            pendingGpxData = data
-            Log.i(TAG, "GPX loaded: ${data.tracks.size} tracks, " +
-                "${data.routes.size} routes, ${data.waypoints.size} waypoints")
+            Log.i(TAG, "Loading GPX: ${gpxFile.name}")
+            val data = GpxData.parse(gpxFile.readBytes()) ?: return@execute
+
+            runOnUiThread {
+                mapManager.showGpxData(data)
+                pendingGpxData = data
+                startNavigationIfReady()
+                Log.i(TAG, "GPX loaded: ${data.tracks.size} tracks, " +
+                    "${data.routes.size} routes, ${data.waypoints.size} waypoints")
+            }
         }
     }
 

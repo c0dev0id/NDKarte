@@ -1,5 +1,6 @@
 package com.ndkarte.app
 
+import android.app.Activity
 import android.content.Context
 import android.location.Location
 import android.speech.tts.TextToSpeech
@@ -7,12 +8,15 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Turn-by-turn route navigator with TTS voice guidance.
  *
  * Uses Rust-generated instructions to announce upcoming turns
- * as the rider approaches each route waypoint.
+ * as the rider approaches each route waypoint. Instruction
+ * generation runs on a background thread to keep the UI fluid.
  */
 class RouteNavigator(
     private val context: Context,
@@ -21,8 +25,11 @@ class RouteNavigator(
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var navigating = false
+    private val navigating = AtomicBoolean(false)
 
+    private val computeExecutor = Executors.newSingleThreadExecutor()
+
+    @Volatile
     private var instructions = emptyList<InstructionData>()
     private var routePoints = emptyList<GpxPoint>()
     private var currentInstructionIndex = 0
@@ -43,24 +50,31 @@ class RouteNavigator(
         }
 
         routePoints = route.points
-        instructions = generateInstructions(route.points)
         currentInstructionIndex = 0
         announcedIndices.clear()
-        navigating = true
+        navigating.set(true)
 
         tts = TextToSpeech(context, this)
 
-        locationProvider.start { location ->
-            onLocationUpdate(location)
-        }
+        // Generate instructions on background thread, then start GPS
+        computeExecutor.execute {
+            val generated = generateInstructions(route.points)
+            instructions = generated
 
-        Log.i(TAG, "Route navigation started: ${route.name ?: "unnamed"}, " +
-            "${instructions.size} instructions")
+            runOnUiThread {
+                locationProvider.start { location ->
+                    onLocationUpdate(location)
+                }
+            }
+
+            Log.i(TAG, "Route navigation started: ${route.name ?: "unnamed"}, " +
+                "${generated.size} instructions")
+        }
     }
 
     /** Stop route navigation. */
     fun stopNavigation() {
-        navigating = false
+        navigating.set(false)
         locationProvider.stop()
 
         tts?.stop()
@@ -75,7 +89,7 @@ class RouteNavigator(
         Log.i(TAG, "Route navigation stopped")
     }
 
-    val isNavigating: Boolean get() = navigating
+    val isNavigating: Boolean get() = navigating.get()
 
     // -- TextToSpeech.OnInitListener --
 
@@ -84,8 +98,7 @@ class RouteNavigator(
             val result = tts?.setLanguage(Locale.US)
             ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
                 result != TextToSpeech.LANG_NOT_SUPPORTED
-            if (ttsReady && navigating && instructions.isNotEmpty()) {
-                // Announce start instruction
+            if (ttsReady && navigating.get() && instructions.isNotEmpty()) {
                 speak(instructions[0].text)
                 announcedIndices.add(0)
             }
@@ -95,10 +108,9 @@ class RouteNavigator(
     // -- Internal --
 
     private fun onLocationUpdate(location: Location) {
-        if (!navigating || !ttsReady) return
+        if (!navigating.get() || !ttsReady) return
         if (instructions.size < 2) return
 
-        // Find the next unannounced instruction
         val nextIdx = (currentInstructionIndex + 1).coerceAtMost(instructions.size - 1)
         if (nextIdx in announcedIndices) return
 
@@ -112,7 +124,6 @@ class RouteNavigator(
             waypoint.lat, waypoint.lon
         )
 
-        // Announce when within approach distance
         if (distToWaypoint < APPROACH_DISTANCE_M) {
             speak(nextInstruction.text)
             announcedIndices.add(nextIdx)
@@ -167,6 +178,10 @@ class RouteNavigator(
             Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
             Math.sin(dlon / 2) * Math.sin(dlon / 2)
         return 2.0 * 6371008.8 * Math.asin(Math.sqrt(a))
+    }
+
+    private fun runOnUiThread(action: () -> Unit) {
+        (context as? Activity)?.runOnUiThread(action)
     }
 
     companion object {

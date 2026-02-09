@@ -1,5 +1,6 @@
 package com.ndkarte.app
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Color
 import android.location.Location
@@ -15,14 +16,16 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Manages live track navigation with GPS positioning, drag-line
  * rendering, and text-to-speech guidance.
  *
- * The drag-line is a thin line drawn from the rider's GPS position
- * to the nearest point on the active track, visually showing how
- * far off-track the rider is.
+ * Heavy computation (JNI calls, JSON serialization) runs on a
+ * background thread. Only MapLibre layer updates and TTS calls
+ * are posted back to the main thread.
  */
 class NavigationManager(
     private val context: Context,
@@ -34,8 +37,15 @@ class NavigationManager(
     private var activeTrackPoints: List<GpxPoint>? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var navigating = false
+    private val navigating = AtomicBoolean(false)
 
+    private val computeExecutor = Executors.newSingleThreadExecutor()
+
+    // Cached values computed once at startNavigation
+    private var cachedTrackJson: String? = null
+    private var cachedTrackLength: Double = 0.0
+
+    @Volatile
     private var lastProjection: ProjectionData? = null
     private var lastOffTrackAnnounceM = 0.0
 
@@ -56,8 +66,8 @@ class NavigationManager(
     /**
      * Start navigation on a track.
      *
-     * Begins GPS updates and renders the rider position and drag-line
-     * on the map. Initializes TTS for voice guidance.
+     * Pre-computes cached track JSON and length on a background thread,
+     * then begins GPS updates.
      */
     fun startNavigation(track: GpxTrack) {
         if (track.points.size < 2) {
@@ -66,14 +76,23 @@ class NavigationManager(
         }
 
         activeTrackPoints = track.points
-        navigating = true
+        navigating.set(true)
         lastProjection = null
         lastOffTrackAnnounceM = 0.0
 
         tts = TextToSpeech(context, this)
 
-        locationProvider.start { location ->
-            onLocationUpdate(location)
+        // Pre-compute cached values on background thread
+        computeExecutor.execute {
+            cachedTrackJson = pointsToJson(track.points)
+            cachedTrackLength = estimateTrackLength(track.points)
+
+            // Start GPS after caches are ready
+            runOnUiThread {
+                locationProvider.start { location ->
+                    onLocationUpdate(location)
+                }
+            }
         }
 
         Log.i(TAG, "Navigation started on track: ${track.name ?: "unnamed"}")
@@ -81,7 +100,7 @@ class NavigationManager(
 
     /** Stop navigation and clean up resources. */
     fun stopNavigation() {
-        navigating = false
+        navigating.set(false)
         locationProvider.stop()
         clearNavigationLayers()
 
@@ -92,12 +111,14 @@ class NavigationManager(
 
         activeTrackPoints = null
         lastProjection = null
+        cachedTrackJson = null
+        cachedTrackLength = 0.0
 
         Log.i(TAG, "Navigation stopped")
     }
 
     /** Whether navigation is currently active. */
-    val isNavigating: Boolean get() = navigating
+    val isNavigating: Boolean get() = navigating.get()
 
     /** Latest projection data, or null if not navigating. */
     val currentProjection: ProjectionData? get() = lastProjection
@@ -121,18 +142,34 @@ class NavigationManager(
 
     // -- Internal --
 
+    /**
+     * Handle a GPS location update. Dispatches heavy computation
+     * (JNI projection call) to background thread, then posts UI
+     * updates back to the main thread.
+     */
     private fun onLocationUpdate(location: Location) {
-        if (!navigating) return
+        if (!navigating.get()) return
 
-        val points = activeTrackPoints ?: return
-        val trackJson = pointsToJson(points)
-        val resultJson = RustBridge.projectOnTrack(location.latitude, location.longitude, trackJson)
-        val projection = parseProjection(resultJson) ?: return
+        val trackJson = cachedTrackJson ?: return
+        val lat = location.latitude
+        val lon = location.longitude
 
-        lastProjection = projection
-        updateNavigationLayers(location, projection)
-        checkOffTrackWarning(projection)
-        checkProgressAnnouncement(projection, points)
+        computeExecutor.execute {
+            if (!navigating.get()) return@execute
+
+            val resultJson = RustBridge.projectOnTrack(lat, lon, trackJson)
+            val projection = parseProjection(resultJson) ?: return@execute
+
+            runOnUiThread {
+                if (!navigating.get()) return@runOnUiThread
+
+                val prev = lastProjection
+                lastProjection = projection
+                updateNavigationLayers(location, projection)
+                checkOffTrackWarning(projection)
+                checkProgressAnnouncement(projection, prev)
+            }
+        }
     }
 
     /**
@@ -251,23 +288,20 @@ class NavigationManager(
 
     /**
      * Announce progress milestones along the track.
+     * Uses cached track length instead of recalculating per update.
      */
-    private fun checkProgressAnnouncement(projection: ProjectionData, points: List<GpxPoint>) {
+    private fun checkProgressAnnouncement(projection: ProjectionData, prev: ProjectionData?) {
         if (!ttsReady) return
+        if (prev == null) return
+        if (cachedTrackLength < 1000.0) return
 
-        val prev = lastProjection ?: return
-        val totalLength = estimateTrackLength(points)
-        if (totalLength < 1000.0) return
+        val remaining = cachedTrackLength - projection.distanceAlongM
+        val prevRemaining = cachedTrackLength - prev.distanceAlongM
 
-        val remaining = totalLength - projection.distanceAlongM
-        val prevRemaining = totalLength - prev.distanceAlongM
-
-        // Announce when approaching the end
         if (remaining < APPROACH_ANNOUNCE_M && prevRemaining >= APPROACH_ANNOUNCE_M) {
             speak("${remaining.toInt()} meters to destination.")
         }
 
-        // Announce arrival
         if (remaining < ARRIVAL_M && prevRemaining >= ARRIVAL_M) {
             speak("You have arrived.")
         }
@@ -280,11 +314,8 @@ class NavigationManager(
         Log.d(TAG, "TTS: $text")
     }
 
+    /** Compute track length once. Called from background thread. */
     private fun estimateTrackLength(points: List<GpxPoint>): Double {
-        val json = pointsToJson(points)
-        // Use the first and last point with Rust to get total track length.
-        // For efficiency, use the last projection's distance_along_m as a proxy
-        // when the rider is near the end. Otherwise, compute via haversine sum.
         var total = 0.0
         for (i in 1 until points.size) {
             val dlat = points[i].lat - points[i - 1].lat
@@ -332,6 +363,10 @@ class NavigationManager(
             Log.e(TAG, "Failed to parse projection JSON", e)
             return null
         }
+    }
+
+    private fun runOnUiThread(action: () -> Unit) {
+        (context as? Activity)?.runOnUiThread(action)
     }
 
     companion object {
