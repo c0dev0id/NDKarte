@@ -43,6 +43,12 @@ android {
             jniLibs.srcDirs("src/main/jniLibs")
         }
     }
+
+    packaging {
+        resources {
+            pickFirst("META-INF/INDEX.LIST")
+        }
+    }
 }
 
 dependencies {
