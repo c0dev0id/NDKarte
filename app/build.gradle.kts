@@ -47,6 +47,16 @@ android {
     packaging {
         resources {
             pickFirst("META-INF/INDEX.LIST")
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+            )
         }
     }
 }
