@@ -2,7 +2,7 @@ package com.ndkarte.app
 
 import android.content.Context
 import android.util.Log
-import JSONArray
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
