@@ -1,0 +1,202 @@
+{
+  "africa": [
+    "algeria", "angola", "benin", "botswana", "burkina-faso", "burundi", "cameroon",
+    "canary-islands", "cape-verde", "central-african-republic", "chad", "comores",
+    "congo-brazzaville", "congo-democratic-republic", "djibouti", "egypt",
+    "equatorial-guinea", "eritrea", "ethiopia", "gabon", "ghana", "guinea",
+    "guinea-bissau", "ivory-coast", "kenya", "lesotho", "liberia", "libya",
+    "madagascar", "malawi", "mali", "mauritania", "mauritius", "morocco",
+    "mozambique", "namibia", "niger", "nigeria", "rwanda",
+    "saint-helena-ascension-and-tristan-da-cunha", "sao-tome-and-principe",
+    "senegal-and-gambia", "seychelles", "sierra-leone", "somalia",
+    "south-africa-and-lesotho", "south-sudan", "sudan", "swaziland", "tanzania",
+    "togo", "tunisia", "uganda", "zambia", "zimbabwe"
+  ],
+  "asia": {
+    "afghanistan": null,
+    "armenia": null,
+    "azerbaijan": null,
+    "bangladesh": null,
+    "bhutan": null,
+    "cambodia": null,
+    "china": [
+      "anhui", "beijing", "chongqing", "fujian", "gansu", "guangdong", "guangxi",
+      "guizhou", "hainan", "hebei", "heilongjiang", "henan", "hong-kong", "hubei",
+      "hunan", "inner-mongolia", "jiangsu", "jiangxi", "jilin", "liaoning", "macau",
+      "ningxia", "qinghai", "shaanxi", "shandong", "shanghai", "shanxi", "sichuan",
+      "tianjin", "tibet", "xinjiang", "yunnan", "zhejiang"
+    ],
+    "east-timor": null,
+    "gcc-states": null,
+    "india": [
+      "central-zone", "eastern-zone", "north-eastern-zone", "northern-zone",
+      "southern-zone", "western-zone"
+    ],
+    "indonesia": [
+      "java", "kalimantan", "maluku", "nusa-tenggara", "papua", "sulawesi", "sumatra"
+    ],
+    "iran": null,
+    "iraq": null,
+    "israel-and-palestine": null,
+    "japan": [
+      "chubu", "chugoku", "hokkaido", "kansai", "kanto", "kyushu", "shikoku", "tohoku"
+    ],
+    "jordan": null,
+    "kazakhstan": null,
+    "kyrgyzstan": null,
+    "laos": null,
+    "lebanon": null,
+    "malaysia-singapore-brunei": null,
+    "maldives": null,
+    "mongolia": null,
+    "myanmar": null,
+    "nepal": null,
+    "north-korea": null,
+    "pakistan": null,
+    "philippines": null,
+    "south-korea": null,
+    "sri-lanka": null,
+    "syria": null,
+    "taiwan": null,
+    "tajikistan": null,
+    "thailand": null,
+    "turkmenistan": null,
+    "uzbekistan": null,
+    "vietnam": null,
+    "yemen": null
+  },
+  "australia-oceania": [
+    "american-oceania-1", "american-oceania-2", "american-oceania-3", "australia",
+    "cook-islands", "fiji-1", "fiji-2", "ile-de-clipperton", "kiribati-1", "kiribati-2",
+    "kiribati-3", "marshall-islands", "micronesia", "nauru", "new-caledonia",
+    "new-zealand-1", "new-zealand-2", "niue", "palau", "papua-new-guinea",
+    "pitcairn-islands", "polynesie-francaise", "samoa", "solomon-islands", "tokelau",
+    "tonga", "tuvalu-1", "tuvalu-2", "vanuatu", "wallis-et-futuna"
+  ],
+  "central-america": [
+    "bahamas", "belize", "costa-rica", "cuba", "el-salvador", "guatemala",
+    "haiti-and-domrep", "honduras", "jamaica", "nicaragua", "panama"
+  ],
+  "europe": {
+    "albania": null,
+    "andorra": null,
+    "austria": null,
+    "azores": null,
+    "belarus": null,
+    "belgium": null,
+    "bosnia-herzegovina": null,
+    "bulgaria": null,
+    "croatia": null,
+    "cyprus": null,
+    "czech-republic": null,
+    "denmark": null,
+    "estonia": null,
+    "faroe-islands": null,
+    "finland": null,
+    "france": [
+      "alsace", "aquitaine", "auvergne", "basse-normandie", "bourgogne", "bretagne",
+      "centre", "champagne-ardenne", "corse", "franche-comte", "guadeloupe", "guyane",
+      "haute-normandie", "ile-de-france", "languedoc-roussillon", "limousin", "lorraine",
+      "martinique", "mayotte", "midi-pyrenees", "nord-pas-de-calais", "pays-de-la-loire",
+      "picardie", "poitou-charentes", "provence-alpes-cote-d-azur", "reunion",
+      "rhone-alpes"
+    ],
+    "georgia": null,
+    "germany": [
+      "baden-wuerttemberg", "bayern", "berlin", "brandenburg", "bremen", "hamburg",
+      "hessen", "mecklenburg-vorpommern", "niedersachsen", "nordrhein-westfalen",
+      "rheinland-pfalz", "saarland", "sachsen", "sachsen-anhalt", "schleswig-holstein",
+      "thueringen"
+    ],
+    "great-britain": null,
+    "greece": null,
+    "guernsey-jersey": null,
+    "hungary": null,
+    "iceland": null,
+    "ireland-and-northern-ireland": null,
+    "isle-of-man": null,
+    "italy": [
+      "centro", "isole", "nord-est", "nord-ovest", "sud"
+    ],
+    "kosovo": null,
+    "latvia": null,
+    "liechtenstein": null,
+    "lithuania": null,
+    "luxembourg": null,
+    "macedonia": null,
+    "malta": null,
+    "moldova": null,
+    "monaco": null,
+    "montenegro": null,
+    "netherlands": [
+      "drenthe", "flevoland", "friesland", "gelderland", "groningen", "limburg",
+      "noord-brabant", "noord-holland", "overijssel", "utrecht", "zeeland", "zuid-holland"
+    ],
+    "norway": null,
+    "poland": null,
+    "portugal": null,
+    "romania": null,
+    "serbia": null,
+    "slovakia": null,
+    "slovenia": null,
+    "spain": [
+      "andalucia", "aragon", "asturias", "cantabria", "castilla-la-mancha",
+      "castilla-y-leon", "cataluna", "ceuta", "extremadura", "galicia", "islas-baleares",
+      "la-rioja", "madrid", "melilla", "murcia", "navarra", "pais-vasco", "valencia"
+    ],
+    "sweden": null,
+    "switzerland": null,
+    "turkey": null,
+    "ukraine": null,
+    "united-kingdom": [
+      "england", "scotland", "wales"
+    ]
+  },
+  "north-america": {
+    "canada": [
+      "alberta", "british-columbia", "manitoba", "new-brunswick",
+      "newfoundland-and-labrador", "northwest-territories", "nova-scotia", "nunavut",
+      "ontario", "prince-edward-island", "quebec", "saskatchewan", "yukon"
+    ],
+    "greenland": null,
+    "mexico": null,
+    "us": [
+      "alabama", "alaska-1", "alaska-2", "arizona", "arkansas", "california",
+      "colorado", "connecticut", "delaware", "district-of-columbia", "florida",
+      "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas",
+      "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+      "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada",
+      "new-hampshire", "new-jersey", "new-mexico", "new-york", "north-carolina",
+      "north-dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "puerto-rico",
+      "rhode-island", "south-carolina", "south-dakota", "tennessee", "texas",
+      "us-virgin-islands", "utah", "vermont", "virginia", "washington",
+      "west-virginia", "wisconsin", "wyoming"
+    ],
+    "us-midwest": null,
+    "us-northeast": null,
+    "us-south": null,
+    "us-west": null
+  },
+  "russia": [
+    "central-fed-district", "crimean-fed-district", "far-eastern-fed-district-1",
+    "far-eastern-fed-district-2", "kaliningrad", "north-caucasus-fed-district",
+    "northwestern-fed-district", "siberian-fed-district", "south-fed-district",
+    "ural-fed-district", "volga-fed-district"
+  ],
+  "south-america": {
+    "argentina": null,
+    "bolivia": null,
+    "brazil": [
+      "centro-oeste", "nordeste", "norte", "sudeste", "sul"
+    ],
+    "chile": null,
+    "colombia": null,
+    "ecuador": null,
+    "guyana": null,
+    "paraguay": null,
+    "peru": null,
+    "suriname": null,
+    "uruguay": null,
+    "venezuela": null
+  }
+}

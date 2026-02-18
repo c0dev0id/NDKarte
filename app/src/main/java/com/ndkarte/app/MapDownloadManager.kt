@@ -2,6 +2,7 @@ package com.ndkarte.app
 
 import android.content.Context
 import android.util.Log
+import JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -105,10 +106,14 @@ class MapDownloadManager(private val context: Context) {
     private val activeFutures = ConcurrentHashMap<String, Future<*>>()
     private val cancelFlags   = ConcurrentHashMap<String, Boolean>()
 
-    // ── In-memory caches ──────────────────────────────────────────────────────
+    // ── Catalog (loaded from bundled asset) ───────────────────────────────────
 
-    /** Catalog: continent → list of regions (lazy-fetched). */
-    private val catalogCache = ConcurrentHashMap<String, List<RegionEntry>>()
+    /** Full region catalog read once from assets/map_catalog.json. */
+    private val catalogJson: JSONObject by lazy {
+        context.assets.open("map_catalog.json").bufferedReader().use {
+            JSONObject(it.readText())
+        }
+    }
 
     /** Download states, kept in sync with the state JSON file. */
     private val states = ConcurrentHashMap<String, RegionDownloadState>()
@@ -117,62 +122,48 @@ class MapDownloadManager(private val context: Context) {
         loadStates()
     }
 
-    // ── Catalog fetching ──────────────────────────────────────────────────────
+    // ── Catalog access ────────────────────────────────────────────────────────
+
+    /** Return all continent keys from the bundled catalog, sorted alphabetically. */
+    fun fetchContinents(): List<String> =
+        catalogJson.keys().asSequence().sorted().toList()
 
     /**
-     * Fetch the list of continents available on the Mapsforge map server.
-     * Runs on the calling thread — call from a background executor.
-     */
-    fun fetchContinents(): List<String> {
-        return fetchDirectoryNames(BASE_MAP)
-            .filter { it != "world" }   // "world" entry exists but has no sub-regions
-    }
-
-    /**
-     * Fetch all downloadable regions for a continent.
-     * Sub-directories (e.g. france/, germany/) are expanded one level.
-     * Results are cached in-memory.
+     * Return all downloadable regions for [continent] from the bundled catalog.
+     *
+     * The JSON supports two shapes per continent value:
+     *  - JSONArray  → flat list of region slugs (no country sub-division)
+     *  - JSONObject → map of country slug → null (leaf) or JSONArray of sub-region slugs
      */
     fun fetchRegions(continent: String): List<RegionEntry> {
-        catalogCache[continent]?.let { return it }
-
         val entries = mutableListOf<RegionEntry>()
-
-        val topLevelItems = fetchDirectoryAndFileNames("$BASE_MAP$continent/")
-
-        for (item in topLevelItems) {
-            if (item.isDirectory) {
-                // Sub-directory: fetch its contents for granular regional downloads
-                val subItems = fetchDirectoryAndFileNames("$BASE_MAP$continent/${item.name}/")
-                for (sub in subItems) {
-                    if (!sub.isDirectory && sub.name.endsWith(".map")) {
-                        val baseName = sub.name.removeSuffix(".map")
-                        entries.add(
-                            RegionEntry(
-                                continent = continent,
-                                path = "$continent/${item.name}/$baseName",
-                                displayName = "${toDisplayName(item.name)} – ${toDisplayName(baseName)}",
-                                isSubRegion = true
-                            )
-                        )
+        when (val value = catalogJson.get(continent)) {
+            is JSONArray -> {
+                for (i in 0 until value.length()) {
+                    val slug = value.getString(i)
+                    entries.add(RegionEntry(continent, "$continent/$slug",
+                        toDisplayName(slug), false))
+                }
+            }
+            is JSONObject -> {
+                for (country in value.keys()) {
+                    val subs = value.opt(country)
+                    if (subs is JSONArray && subs.length() > 0) {
+                        for (i in 0 until subs.length()) {
+                            val sub = subs.getString(i)
+                            entries.add(RegionEntry(continent,
+                                "$continent/$country/$sub",
+                                "${toDisplayName(country)} – ${toDisplayName(sub)}",
+                                true))
+                        }
+                    } else {
+                        entries.add(RegionEntry(continent, "$continent/$country",
+                            toDisplayName(country), false))
                     }
                 }
-            } else if (!item.isDirectory && item.name.endsWith(".map")) {
-                val baseName = item.name.removeSuffix(".map")
-                entries.add(
-                    RegionEntry(
-                        continent = continent,
-                        path = "$continent/$baseName",
-                        displayName = toDisplayName(baseName),
-                        isSubRegion = false
-                    )
-                )
             }
         }
-
-        val sorted = entries.sortedBy { it.displayName }
-        catalogCache[continent] = sorted
-        return sorted
+        return entries.sortedBy { it.displayName }
     }
 
     // ── Download control ──────────────────────────────────────────────────────
@@ -484,66 +475,6 @@ class MapDownloadManager(private val context: Context) {
             }
         }
         return tiles
-    }
-
-    // ── Catalog HTML parsing ──────────────────────────────────────────────────
-
-    private data class DirItem(val name: String, val isDirectory: Boolean)
-
-    /**
-     * Fetch directory listing from an HTTP URL that returns an HTML index page.
-     * Returns only directory names (entries ending with '/').
-     */
-    private fun fetchDirectoryNames(url: String): List<String> =
-        fetchDirectoryAndFileNames(url)
-            .filter { it.isDirectory }
-            .map { it.name }
-
-    /**
-     * Parse both files and sub-directories from an HTTP directory index page.
-     * Extracts href values from anchor tags using regex.
-     */
-    private fun fetchDirectoryAndFileNames(url: String): List<DirItem> {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        try {
-            conn.connectTimeout = 15_000
-            conn.readTimeout    = 30_000
-            conn.setRequestProperty("User-Agent", "NDKarte/1.0")
-            conn.connect()
-            if (conn.responseCode != 200) return emptyList()
-            val html = conn.inputStream.bufferedReader().readText()
-            return parseHtmlDirectoryIndex(html)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch directory: $url", e)
-            return emptyList()
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    /**
-     * Extract file/directory entries from an Apache/nginx-style HTML directory listing.
-     * Ignores parent directory links (?C=..., .., /) and hidden files.
-     */
-    private fun parseHtmlDirectoryIndex(html: String): List<DirItem> {
-        // Match href="something" where something doesn't start with ? or /
-        val pattern = Regex("""href="([^"?/][^"]*?)"""")
-        val items = mutableListOf<DirItem>()
-        for (match in pattern.findAll(html)) {
-            val href = match.groupValues[1]
-            if (href.startsWith("..") || href.contains("://")) continue
-            if (href.endsWith("/")) {
-                val name = href.trimEnd('/')
-                if (name.isNotEmpty() && !name.startsWith(".")) {
-                    items.add(DirItem(name, true))
-                }
-            } else {
-                if (!href.startsWith(".") && !href.contains("?")) {
-                    items.add(DirItem(href, false))
-                }
-            }
-        }
-        return items
     }
 
     // ── State persistence ─────────────────────────────────────────────────────
