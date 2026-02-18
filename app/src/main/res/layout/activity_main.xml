@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<org.maplibre.android.maps.MapView
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/mapView"
     android:layout_width="match_parent"
-    android:layout_height="match_parent" />
+    android:layout_height="match_parent">
+
+    <org.maplibre.android.maps.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Floating download button — bottom-right corner of the fullscreen map -->
+    <Button
+        android:id="@+id/btnOpenDownloads"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="⬇ Maps"
+        android:textSize="12sp"
+        android:alpha="0.8"
+        android:background="#1A237E"
+        android:textColor="#FFFFFF"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp" />
+
+</FrameLayout>

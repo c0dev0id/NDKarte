@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import java.io.File
@@ -43,6 +44,11 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
 
         mapView = findViewById(R.id.mapView)
+
+        // Floating download button — opens the offline map download browser.
+        findViewById<Button>(R.id.btnOpenDownloads).setOnClickListener {
+            startActivity(Intent(this, MapDownloadActivity::class.java))
+        }
         mapManager = MapManager(this, mapView)
         locationProvider = LocationProvider(this)
         navigationManager = NavigationManager(this, locationProvider)

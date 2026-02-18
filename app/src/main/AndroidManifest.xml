@@ -27,6 +27,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MapDownloadActivity"
+            android:label="Map Downloads"
+            android:screenOrientation="landscape"
+            android:exported="false" />
     </application>
 
 </manifest>
