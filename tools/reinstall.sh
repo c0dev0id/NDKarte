@@ -1,6 +1,6 @@
 #!/bin/sh
 rm -f app-debug.apk
-gh run download $(gh run list --workflow "Build Android" --status success -L1 --json databaseId --jq '.[].databaseId') --name ndkarte-debug
+gh run download $(gh run list --workflow "Build Android" --limit 1 --json databaseId --jq '.[].databaseId') --name ndkarte-debug
 
 adb uninstall com.ndkarte.app
 adb install app-debug.apk
