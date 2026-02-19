@@ -41,7 +41,7 @@ class MapDownloadManager(private val context: Context) {
         val isSubRegion: Boolean
     )
 
-    enum class DownloadStatus { NOT_DOWNLOADED, IN_PROGRESS, PAUSED, COMPLETED, PARTIAL }
+    enum class DownloadStatus { NOT_DOWNLOADED, IN_PROGRESS, PAUSED, COMPLETED, PARTIAL, ERROR }
 
     data class FileProgress(val downloaded: Long = 0L, val total: Long = 0L) {
         val fraction: Float get() = if (total > 0) downloaded.toFloat() / total else 0f
@@ -204,7 +204,7 @@ class MapDownloadManager(private val context: Context) {
                 performDownload(region, listener)
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed for ${region.path}", e)
-                updateStatus(region, DownloadStatus.PARTIAL)
+                updateStatus(region, DownloadStatus.ERROR)
                 listener.onError(region, e.message ?: "Unknown error")
             } finally {
                 activeFutures.remove(region.path)
@@ -585,7 +585,11 @@ class MapDownloadManager(private val context: Context) {
                 } catch (e: IllegalArgumentException) {
                     DownloadStatus.NOT_DOWNLOADED
                 }
-                val effectiveStatus = if (status == DownloadStatus.IN_PROGRESS) DownloadStatus.PAUSED else status
+                val effectiveStatus = when (status) {
+                    DownloadStatus.IN_PROGRESS -> DownloadStatus.PAUSED
+                    DownloadStatus.ERROR       -> DownloadStatus.PARTIAL  // allow retry after restart
+                    else -> status
+                }
                 states[path] = RegionDownloadState(
                     status = effectiveStatus,
                     map  = FileProgress(obj.optLong("mapDownloaded"), obj.optLong("mapTotal")),
