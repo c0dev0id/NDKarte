@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.zip.ZipInputStream
 import kotlin.math.floor
 
 /**
@@ -19,7 +20,8 @@ import kotlin.math.floor
  *
  * For each region, downloads the vector map (.map), POI database (.poi),
  * boundary polygon (.poly), and all SRTM DEM elevation tiles (.hgt.zip)
- * that intersect the region's bounding box.
+ * that intersect the region's bounding box. After downloading each DEM
+ * tile it extracts the .hgt file from the zip archive.
  *
  * Downloads are resumable: if a partial file exists, it resumes from the
  * last downloaded byte using HTTP Range requests (HTTP 206 Partial Content).
@@ -51,12 +53,27 @@ class MapDownloadManager(private val context: Context) {
         val poi: FileProgress = FileProgress(),
         val poly: FileProgress = FileProgress(),
         val demDownloaded: Int = 0,
-        val demTotal: Int = 0
+        val demTotal: Int = 0,
+        val demExtracted: Int = 0,
+        /** Rolling-average download speed in bytes/second (0 when not downloading). */
+        val speedBytesPerSec: Long = 0L
     ) {
+        /**
+         * Overall progress fraction from 0.0 to 1.0 covering all phases:
+         *  - 85 %  file downloads (.poly + .map + .poi)
+         *  - 10 %  DEM tile downloads
+         *  -  5 %  DEM archive extraction
+         */
         val overallFraction: Float get() {
             val totalBytes = map.total + poi.total + poly.total
-            val downloadedBytes = map.downloaded + poi.downloaded + poly.downloaded
-            return if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes else 0f
+            val dlBytes = map.downloaded + poi.downloaded + poly.downloaded
+            val fileFraction = if (totalBytes > 0) dlBytes.toFloat() / totalBytes else 0f
+
+            val demDlFraction = if (demTotal > 0) demDownloaded.toFloat() / demTotal else 0f
+            val demExFraction = if (demTotal > 0) demExtracted.toFloat() / demTotal else 0f
+
+            return (fileFraction * 0.85f + demDlFraction * 0.10f + demExFraction * 0.05f)
+                .coerceIn(0f, 1f)
         }
     }
 
@@ -85,6 +102,14 @@ class MapDownloadManager(private val context: Context) {
             bytes < 1024 * 1024 -> "${bytes / 1024} KB"
             bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
             else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
+        }
+
+        /** Human-readable download speed string, e.g. "3.5 MB/s". */
+        fun formatSpeed(bytesPerSec: Long): String = when {
+            bytesPerSec <= 0 -> ""
+            bytesPerSec < 1024 -> "${bytesPerSec} B/s"
+            bytesPerSec < 1_048_576 -> "${bytesPerSec / 1024} KB/s"
+            else -> String.format("%.1f MB/s", bytesPerSec / 1_048_576.0)
         }
 
         /** Convert a file path segment like "great-britain" into "Great Britain". */
@@ -153,7 +178,7 @@ class MapDownloadManager(private val context: Context) {
                             val sub = subs.getString(i)
                             entries.add(RegionEntry(continent,
                                 "$continent/$country/$sub",
-                                "${toDisplayName(country)} – ${toDisplayName(sub)}",
+                                "${toDisplayName(country)} \u2013 ${toDisplayName(sub)}",
                                 true))
                         }
                     } else {
@@ -217,6 +242,9 @@ class MapDownloadManager(private val context: Context) {
     fun getState(region: RegionEntry): RegionDownloadState =
         states[region.path] ?: RegionDownloadState()
 
+    fun getStateByPath(path: String): RegionDownloadState =
+        states[path] ?: RegionDownloadState()
+
     fun isDownloading(region: RegionEntry): Boolean =
         activeFutures.containsKey(region.path) && cancelFlags[region.path] != true
 
@@ -225,7 +253,7 @@ class MapDownloadManager(private val context: Context) {
     private fun performDownload(region: RegionEntry, listener: DownloadProgressListener) {
         val segments = region.path.split("/")
         val continent = segments[0]
-        val regionSubPath = segments.drop(1).joinToString("/")   // e.g. "germany" or "france/alsace"
+        val regionSubPath = segments.drop(1).joinToString("/")
 
         val mapUrl  = "$BASE_MAP$continent/$regionSubPath.map"
         val poiUrl  = "$BASE_POI$continent/$regionSubPath.poi"
@@ -235,7 +263,7 @@ class MapDownloadManager(private val context: Context) {
         val poiDest  = File(poisDir,      "$continent/$regionSubPath.poi")
         val polyDest = File(polyDir,      "$continent/$regionSubPath.poly")
 
-        var currentState = getState(region).copy(status = DownloadStatus.IN_PROGRESS)
+        var currentState = getState(region).copy(status = DownloadStatus.IN_PROGRESS, speedBytesPerSec = 0L)
         states[region.path] = currentState
         saveStates()
 
@@ -245,8 +273,8 @@ class MapDownloadManager(private val context: Context) {
         if (polyDest.length() == 0L || currentState.poly.downloaded < currentState.poly.total) {
             Log.i(TAG, "Downloading poly: $polyUrl")
             downloadFile(polyUrl, polyDest,
-                onProgress = { dl, total ->
-                    currentState = currentState.copy(poly = FileProgress(dl, total))
+                onProgress = { dl, total, speed ->
+                    currentState = currentState.copy(poly = FileProgress(dl, total), speedBytesPerSec = speed)
                     states[region.path] = currentState
                     listener.onProgress(region, currentState)
                 },
@@ -255,14 +283,13 @@ class MapDownloadManager(private val context: Context) {
         }
         if (isCancelled()) return
 
-        // Mark poly complete and recompute DEM tiles now that the file exists
         currentState = currentState.copy(poly = FileProgress(polyDest.length(), polyDest.length()))
 
         // 2. Download .map (large)
         Log.i(TAG, "Downloading map: $mapUrl")
         downloadFile(mapUrl, mapDest,
-            onProgress = { dl, total ->
-                currentState = currentState.copy(map = FileProgress(dl, total))
+            onProgress = { dl, total, speed ->
+                currentState = currentState.copy(map = FileProgress(dl, total), speedBytesPerSec = speed)
                 states[region.path] = currentState
                 listener.onProgress(region, currentState)
             },
@@ -273,8 +300,8 @@ class MapDownloadManager(private val context: Context) {
         // 3. Download .poi (medium)
         Log.i(TAG, "Downloading poi: $poiUrl")
         downloadFile(poiUrl, poiDest,
-            onProgress = { dl, total ->
-                currentState = currentState.copy(poi = FileProgress(dl, total))
+            onProgress = { dl, total, speed ->
+                currentState = currentState.copy(poi = FileProgress(dl, total), speedBytesPerSec = speed)
                 states[region.path] = currentState
                 listener.onProgress(region, currentState)
             },
@@ -282,38 +309,68 @@ class MapDownloadManager(private val context: Context) {
         )
         if (isCancelled()) return
 
-        // 4. Download DEM tiles derived from .poly bounding box
+        // 4. Download DEM tiles then extract each archive
         if (polyDest.exists() && polyDest.length() > 0) {
             val demTiles = computeDemTilesForPoly(polyDest)
             Log.i(TAG, "DEM tiles for ${region.path}: ${demTiles.size} tiles")
-            currentState = currentState.copy(demTotal = demTiles.size)
+            currentState = currentState.copy(demTotal = demTiles.size, speedBytesPerSec = 0L)
             var demDone = currentState.demDownloaded
+            var demExtracted = currentState.demExtracted
 
             for ((band, filename) in demTiles) {
                 if (isCancelled()) break
-                val demUrl = "$BASE_DEM$band/$filename"
-                val demDest = File(demDir, "$band/$filename")
-                if (demDest.exists() && demDest.length() > 0) {
-                    // Already downloaded (possibly by another region)
+                val zipDest = File(demDir, "$band/$filename")
+                val hgtName = filename.removeSuffix(".zip")
+                val hgtDest = File(demDir, "$band/$hgtName")
+
+                if (hgtDest.exists() && hgtDest.length() > 0) {
+                    // Already downloaded and extracted by a previous session
                     demDone++
-                    currentState = currentState.copy(demDownloaded = demDone)
+                    demExtracted++
+                    currentState = currentState.copy(demDownloaded = demDone, demExtracted = demExtracted)
                     states[region.path] = currentState
                     listener.onProgress(region, currentState)
                     continue
                 }
-                downloadFile(demUrl, demDest,
-                    onProgress = { _, _ -> /* fine-grained DEM progress not tracked per tile */ },
-                    cancelCheck = ::isCancelled
-                )
+
+                // Download zip if not yet present
+                if (!zipDest.exists() || zipDest.length() == 0L) {
+                    val demUrl = "$BASE_DEM$band/$filename"
+                    downloadFile(demUrl, zipDest,
+                        onProgress = { _, _, speed ->
+                            currentState = currentState.copy(speedBytesPerSec = speed)
+                            states[region.path] = currentState
+                            listener.onProgress(region, currentState)
+                        },
+                        cancelCheck = ::isCancelled
+                    )
+                }
+
                 demDone++
-                currentState = currentState.copy(demDownloaded = demDone)
+                currentState = currentState.copy(demDownloaded = demDone, speedBytesPerSec = 0L)
+                states[region.path] = currentState
+                listener.onProgress(region, currentState)
+
+                if (isCancelled()) break
+
+                // Extract zip → .hgt file
+                if (zipDest.exists() && zipDest.length() > 0) {
+                    try {
+                        extractZip(zipDest, zipDest.parentFile!!)
+                        zipDest.delete()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to extract $zipDest: ${e.message}")
+                    }
+                }
+                demExtracted++
+                currentState = currentState.copy(demExtracted = demExtracted)
                 states[region.path] = currentState
                 listener.onProgress(region, currentState)
             }
         }
 
         if (!isCancelled()) {
-            currentState = currentState.copy(status = DownloadStatus.COMPLETED)
+            currentState = currentState.copy(status = DownloadStatus.COMPLETED, speedBytesPerSec = 0L)
             states[region.path] = currentState
             saveStates()
             listener.onComplete(region, currentState)
@@ -322,16 +379,14 @@ class MapDownloadManager(private val context: Context) {
     }
 
     /**
-     * Download a single file with HTTP Range resume support.
+     * Download a single file with HTTP Range resume support and rolling-window speed tracking.
      *
-     * Returns true if the file was fully downloaded (or was already complete),
-     * false if the download failed or was cancelled.
-     * 404 responses are treated as success (file not available on server).
+     * Returns true on success or 404 (file not available). False on error or cancellation.
      */
     private fun downloadFile(
         url: String,
         dest: File,
-        onProgress: (downloaded: Long, total: Long) -> Unit,
+        onProgress: (downloaded: Long, total: Long, speedBytesPerSec: Long) -> Unit,
         cancelCheck: () -> Boolean
     ): Boolean {
         dest.parentFile?.mkdirs()
@@ -354,9 +409,8 @@ class MapDownloadManager(private val context: Context) {
                     return true
                 }
                 code == 416 -> {
-                    // Range Not Satisfiable — file is already fully downloaded.
                     Log.d(TAG, "Already complete (416): $url")
-                    onProgress(startByte, startByte)
+                    onProgress(startByte, startByte, 0L)
                     return true
                 }
                 code != 200 && code != 206 -> {
@@ -370,6 +424,10 @@ class MapDownloadManager(private val context: Context) {
                              else contentLength
             val append = (code == 206)
 
+            // 2-second rolling window for speed calculation
+            var windowStartMs = System.currentTimeMillis()
+            var windowBytes = 0L
+            var currentSpeed = 0L
             var bytesSinceLastSave = 0L
 
             FileOutputStream(dest, append).use { out ->
@@ -381,8 +439,19 @@ class MapDownloadManager(private val context: Context) {
                         if (cancelCheck()) return false
                         out.write(buf, 0, n)
                         written += n
+                        windowBytes += n
                         bytesSinceLastSave += n
-                        onProgress(written, totalBytes)
+
+                        val now = System.currentTimeMillis()
+                        val elapsed = now - windowStartMs
+                        if (elapsed >= 2_000L) {
+                            currentSpeed = if (elapsed > 0) windowBytes * 1000L / elapsed else 0L
+                            windowStartMs = now
+                            windowBytes = 0L
+                        }
+
+                        onProgress(written, totalBytes, currentSpeed)
+
                         if (bytesSinceLastSave >= PROGRESS_SAVE_INTERVAL_BYTES) {
                             saveStates()
                             bytesSinceLastSave = 0
@@ -396,15 +465,24 @@ class MapDownloadManager(private val context: Context) {
         }
     }
 
+    /** Extract all files from a zip archive into [destDir]. */
+    private fun extractZip(zipFile: File, destDir: File) {
+        ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val outFile = File(destDir, entry.name)
+                    outFile.parentFile?.mkdirs()
+                    FileOutputStream(outFile).use { zis.copyTo(it) }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+    }
+
     // ── DEM tile computation ──────────────────────────────────────────────────
 
-    /**
-     * Compute the list of DEM tiles (band dir, filename) that cover the
-     * bounding box of the given .poly file.
-     *
-     * The SRTM DEM3 files are named like N48E008.hgt.zip and each covers
-     * exactly 1°×1° starting at the given integer lat/lon.
-     */
     fun computeDemTilesForPoly(polyFile: File): List<Pair<String, String>> {
         val bbox = parsePolyBbox(polyFile) ?: return emptyList()
         return computeDemTiles(bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon)
@@ -412,17 +490,6 @@ class MapDownloadManager(private val context: Context) {
 
     data class BoundingBox(val minLat: Double, val maxLat: Double, val minLon: Double, val maxLon: Double)
 
-    /**
-     * Parse lat/lon bounding box from a Osmosis .poly file.
-     *
-     * .poly format:
-     *   region-name
-     *   1
-     *      lon  lat
-     *      ...
-     *   END
-     *   END
-     */
     fun parsePolyBbox(polyFile: File): BoundingBox? {
         var minLat = Double.MAX_VALUE
         var maxLat = -Double.MAX_VALUE
@@ -450,10 +517,6 @@ class MapDownloadManager(private val context: Context) {
         return if (hasCoords) BoundingBox(minLat, maxLat, minLon, maxLon) else null
     }
 
-    /**
-     * Enumerate 1°×1° DEM tiles covering the given bounding box.
-     * Returns list of (band-directory, filename) pairs.
-     */
     fun computeDemTiles(
         minLat: Double, maxLat: Double,
         minLon: Double, maxLon: Double
@@ -481,7 +544,7 @@ class MapDownloadManager(private val context: Context) {
 
     private fun updateStatus(region: RegionEntry, status: DownloadStatus) {
         val current = states[region.path] ?: RegionDownloadState()
-        states[region.path] = current.copy(status = status)
+        states[region.path] = current.copy(status = status, speedBytesPerSec = 0L)
         saveStates()
     }
 
@@ -499,6 +562,7 @@ class MapDownloadManager(private val context: Context) {
                     put("polyTotal", state.poly.total)
                     put("demDownloaded", state.demDownloaded)
                     put("demTotal", state.demTotal)
+                    put("demExtracted", state.demExtracted)
                 }
                 root.put(path, obj)
             }
@@ -521,7 +585,6 @@ class MapDownloadManager(private val context: Context) {
                 } catch (e: IllegalArgumentException) {
                     DownloadStatus.NOT_DOWNLOADED
                 }
-                // A download that was IN_PROGRESS when the app died is treated as PAUSED
                 val effectiveStatus = if (status == DownloadStatus.IN_PROGRESS) DownloadStatus.PAUSED else status
                 states[path] = RegionDownloadState(
                     status = effectiveStatus,
@@ -529,7 +592,8 @@ class MapDownloadManager(private val context: Context) {
                     poi  = FileProgress(obj.optLong("poiDownloaded"), obj.optLong("poiTotal")),
                     poly = FileProgress(obj.optLong("polyDownloaded"), obj.optLong("polyTotal")),
                     demDownloaded = obj.optInt("demDownloaded"),
-                    demTotal      = obj.optInt("demTotal")
+                    demTotal      = obj.optInt("demTotal"),
+                    demExtracted  = obj.optInt("demExtracted")
                 )
             }
             Log.i(TAG, "Loaded state for ${states.size} region(s)")
