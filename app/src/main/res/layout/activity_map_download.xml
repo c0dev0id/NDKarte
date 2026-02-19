@@ -1,120 +1,159 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<!--
+  Map Download screen.
+  Layer order (bottom → top):
+    1. InteractiveMapView  – full-screen map
+    2. downloadsOverlay    – left-side slide-in download panel
+    3. legend              – bottom-right status key
+    4. tvTooltip           – centre-screen region name tooltip
+    5. btnBack             – top-left back button (topmost)
+-->
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <!-- Toolbar -->
-    <LinearLayout
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:orientation="horizontal"
-        android:background="#1A237E"
-        android:gravity="center_vertical"
-        android:paddingStart="8dp"
-        android:paddingEnd="16dp"
-        android:elevation="4dp">
-
-        <Button
-            android:id="@+id/btnBack"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:text="←"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="Map Downloads"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-    </LinearLayout>
-
-    <!-- Legend bar -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="28dp"
-        android:orientation="horizontal"
-        android:background="#E8EAF6"
-        android:gravity="center_vertical"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
-
-        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#CFD8DC" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Not downloaded" android:textSize="10sp" android:textColor="#546E7A"
-            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
-
-        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#64B5F6" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Downloading" android:textSize="10sp" android:textColor="#546E7A"
-            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
-
-        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#81C784" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Downloaded" android:textSize="10sp" android:textColor="#546E7A"
-            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
-
-        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#FFB74D" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Paused" android:textSize="10sp" android:textColor="#546E7A"
-            android:layout_marginStart="4dp" />
-
-    </LinearLayout>
-
-    <!-- Interactive world map -->
+    <!-- 1. Full-screen interactive map -->
     <com.ndkarte.app.InteractiveMapView
         android:id="@+id/mapView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_height="match_parent" />
 
-    <!-- Active downloads panel -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="#ECEFF1"
-        android:elevation="2dp">
-
-        <TextView
-            android:id="@+id/tvPanelHint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:text="Tap a region on the map to download it."
-            android:textSize="12sp"
-            android:textColor="#546E7A"
-            android:visibility="visible" />
+    <!-- 2. Left-side download overlay panel -->
+    <FrameLayout
+        android:id="@+id/downloadsOverlay"
+        android:layout_width="250dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#CC000000"
+        android:visibility="gone">
 
         <ScrollView
             android:id="@+id/downloadsScroll"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxHeight="180dp"
-            android:visibility="gone">
+            android:layout_height="match_parent">
 
             <LinearLayout
                 android:id="@+id/downloadsPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp" />
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
 
         </ScrollView>
 
+    </FrameLayout>
+
+    <!-- 3. Bottom-right legend -->
+    <LinearLayout
+        android:id="@+id/legend"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="8dp"
+        android:background="#CC000000"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <!-- Available -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="#2A4F6E" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Available"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginStart="6dp" />
+
+        </LinearLayout>
+
+        <!-- Downloading -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="#1565C0" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Downloading"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginStart="6dp" />
+
+        </LinearLayout>
+
+        <!-- Downloaded -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="#0D47A1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Downloaded"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginStart="6dp" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
-</LinearLayout>
+    <!-- 4. Centre-screen tooltip (shown by Activity when a region is tapped) -->
+    <TextView
+        android:id="@+id/tvTooltip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#CC000000"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- 5. Back button – top-left, rendered last so it sits above everything -->
+    <Button
+        android:id="@+id/btnBack"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:background="#CC000000"
+        android:text="←"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:padding="0dp" />
+
+</FrameLayout>
