@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- Toolbar -->
     <LinearLayout
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
@@ -37,27 +38,83 @@
 
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvStatus"
+    <!-- Legend bar -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="28dp"
+        android:orientation="horizontal"
         android:background="#E8EAF6"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:text="Loading available regions…"
-        android:textColor="#333333"
-        android:textSize="13sp"
-        android:visibility="visible" />
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
-    <ListView
-        android:id="@+id/regionList"
+        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#CFD8DC" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Not downloaded" android:textSize="10sp" android:textColor="#546E7A"
+            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
+
+        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#64B5F6" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Downloading" android:textSize="10sp" android:textColor="#546E7A"
+            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
+
+        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#81C784" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Downloaded" android:textSize="10sp" android:textColor="#546E7A"
+            android:layout_marginStart="4dp" android:layout_marginEnd="12dp" />
+
+        <View android:layout_width="12dp" android:layout_height="12dp" android:background="#FFB74D" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Paused" android:textSize="10sp" android:textColor="#546E7A"
+            android:layout_marginStart="4dp" />
+
+    </LinearLayout>
+
+    <!-- Interactive world map -->
+    <com.ndkarte.app.InteractiveMapView
+        android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:divider="#E0E0E0"
-        android:dividerHeight="1dp"
-        android:scrollbars="vertical" />
+        android:layout_weight="1" />
+
+    <!-- Active downloads panel -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#ECEFF1"
+        android:elevation="2dp">
+
+        <TextView
+            android:id="@+id/tvPanelHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="Tap a region on the map to download it."
+            android:textSize="12sp"
+            android:textColor="#546E7A"
+            android:visibility="visible" />
+
+        <ScrollView
+            android:id="@+id/downloadsScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="180dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/downloadsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+
+        </ScrollView>
+
+    </LinearLayout>
 
 </LinearLayout>
