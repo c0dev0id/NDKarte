@@ -13,9 +13,17 @@ import kotlin.math.*
 /**
  * Interactive world map view for browsing and downloading map regions.
  *
- * Renders a world landmass base layer plus semi-transparent region overlays
- * using Mercator projection. Supports pan, pinch-zoom, and tap gestures.
- * Regions are color-coded by download status. No text labels are drawn on canvas.
+ * Renders a world landmass base layer plus region overlays using Mercator
+ * projection. Supports pan, pinch-zoom, tap, and mouse-hover gestures.
+ *
+ * Visual contract:
+ *  - Ocean: dark navy background.
+ *  - Landmasses: filled dark-green polygons; coastline border.
+ *  - NOT_DOWNLOADED regions: thin outline strokes ONLY, clipped to land —
+ *    the landmass is fully visible; faint lines show downloadable areas.
+ *  - Active regions (Downloading / Paused / Completed / Error):
+ *    semi-transparent fill + border, also clipped to landmass so they
+ *    never bleed into the ocean.
  */
 class InteractiveMapView @JvmOverloads constructor(
     context: Context,
@@ -28,7 +36,7 @@ class InteractiveMapView @JvmOverloads constructor(
     data class MapRegion(
         val path: String,
         val label: String,
-        val polygon: List<PointF>,   // lon, lat coordinate pairs
+        val polygon: List<PointF>,   // lon/lat coordinate pairs
         val centerLon: Float,
         val centerLat: Float,
         val hasSubRegions: Boolean
@@ -41,6 +49,8 @@ class InteractiveMapView @JvmOverloads constructor(
     interface OnRegionClickListener {
         fun onRegionClicked(region: MapRegion?)
         fun onEmptyTapped()
+        /** Called on mouse/stylus hover; null means pointer left all regions. */
+        fun onRegionHovered(region: MapRegion?) {}   // default no-op
     }
 
     var onRegionClickListener: OnRegionClickListener? = null
@@ -48,7 +58,7 @@ class InteractiveMapView @JvmOverloads constructor(
     // ── Region data ───────────────────────────────────────────────────────────
 
     private val regions = mutableListOf<MapRegion>()
-    private val regionStatusMap = mutableMapOf<String, RegionStatus>()
+    private val regionStatusMap  = mutableMapOf<String, RegionStatus>()
     private val regionProgressMap = mutableMapOf<String, Float>()
     private var selectedPath: String? = null
 
@@ -56,7 +66,7 @@ class InteractiveMapView @JvmOverloads constructor(
 
     private val worldLandmasses = mutableListOf<WorldLandmass>()
 
-    // ── Tooltip state (set by handleTap; Activity reads and shows a TextView) ─
+    // ── Tooltip state ─────────────────────────────────────────────────────────
 
     var tooltipLabel: String? = null
     var tooltipX: Float = 0f
@@ -69,7 +79,7 @@ class InteractiveMapView @JvmOverloads constructor(
 
     // ── Viewport (Mercator) ───────────────────────────────────────────────────
 
-    private var centerLon = 10.0    // Shows whole world when zoom=2
+    private var centerLon = 10.0
     private var centerLat = 20.0
     private var zoom = 2.0          // pixels per degree longitude
     private val minZoom = 1.5
@@ -88,7 +98,7 @@ class InteractiveMapView @JvmOverloads constructor(
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 val oldZoom = zoom
-                val focusLon = (detector.focusX - width / 2f) / oldZoom + centerLon
+                val focusLon  = (detector.focusX - width / 2f) / oldZoom + centerLon
                 val focalMerc = mercY(centerLat) + (height / 2f - detector.focusY) / oldZoom
                 zoom = (zoom * detector.scaleFactor).coerceIn(minZoom, maxZoom)
                 centerLon = focusLon - (detector.focusX - width / 2f) / zoom
@@ -102,37 +112,37 @@ class InteractiveMapView @JvmOverloads constructor(
 
     // ── Paints ────────────────────────────────────────────────────────────────
 
-    // Ocean background: very dark navy
     private val oceanPaint = Paint().apply {
         color = Color.parseColor("#0D1B2A")
     }
 
-    // World landmass fill: dark green-gray
     private val landmassFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.parseColor("#1C3A2A")
     }
 
-    // World landmass border: slightly lighter green-gray
     private val landmassBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#243D2E")
-        strokeWidth = 0.5f
+        color = Color.parseColor("#2B5040")
+        strokeWidth = 0.8f
     }
 
-    // Region overlay fill (color set dynamically per status)
+    /**
+     * Border paint for NOT_DOWNLOADED regions — thin, semi-transparent, so the
+     * landmass is fully visible and only faint grid lines appear.
+     */
+    private val regionOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.argb(100, 90, 180, 130)   // translucent green-white
+        strokeWidth = 0.7f
+    }
+
+    /** Fill for active download-state regions. Color set dynamically. */
     private val regionFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
-    // Region border – normal
-    private val regionBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = Color.parseColor("#3D6080")
-        strokeWidth = 0.8f
-    }
-
-    // Region border – active (downloading / completed)
+    /** Border for active download-state regions. */
     private val regionActiveBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.parseColor("#64B5F6")
@@ -144,27 +154,21 @@ class InteractiveMapView @JvmOverloads constructor(
         style = Paint.Style.FILL
         color = Color.parseColor("#FFEB3B")
     }
-
     private val userDotBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.WHITE
         strokeWidth = 2f
     }
 
-    // ── Status colors (with alpha baked in) ──────────────────────────────────
+    // ── Status fill colors (alpha baked in) ──────────────────────────────────
 
-    private val colorNotDownloaded = Color.argb(180, 0x2A, 0x4F, 0x6E)  // #2A4F6E a=180
-    private val colorDownloading   = Color.argb(200, 0x15, 0x65, 0xC0)  // #1565C0 a=200
-    private val colorPaused        = Color.argb(160, 0x4A, 0x4A, 0x2E)  // #4A4A2E a=160
-    private val colorCompleted     = Color.argb(200, 0x0D, 0x47, 0xA1)  // #0D47A1 a=200
-    private val colorError         = Color.argb(180, 0x8B, 0x1A, 0x1A)  // #8B1A1A a=180
+    private val colorDownloading = Color.argb(170, 0x15, 0x65, 0xC0)
+    private val colorPaused      = Color.argb(140, 0x4A, 0x4A, 0x2E)
+    private val colorCompleted   = Color.argb(180, 0x0D, 0x47, 0xA1)
+    private val colorError       = Color.argb(160, 0x8B, 0x1A, 0x1A)
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /**
-     * Load region boundary data from a JSON string.
-     * Initialises all loaded regions to NOT_DOWNLOADED in regionStatusMap.
-     */
     fun loadRegions(json: String) {
         regions.clear()
         val arr = JSONArray(json)
@@ -178,25 +182,20 @@ class InteractiveMapView @JvmOverloads constructor(
             }
             val center = obj.getJSONArray("center")
             val region = MapRegion(
-                path = obj.getString("path"),
-                label = obj.getString("label"),
-                polygon = points,
-                centerLon = center.getDouble(0).toFloat(),
-                centerLat = center.getDouble(1).toFloat(),
+                path          = obj.getString("path"),
+                label         = obj.getString("label"),
+                polygon       = points,
+                centerLon     = center.getDouble(0).toFloat(),
+                centerLat     = center.getDouble(1).toFloat(),
                 hasSubRegions = obj.optBoolean("hasSubRegions", false)
             )
             regions.add(region)
-            // Initialise all regions as NOT_DOWNLOADED so they show as downloadable
             regionStatusMap.getOrPut(region.path) { RegionStatus.NOT_DOWNLOADED }
         }
         Log.i(TAG, "Loaded ${regions.size} map regions")
         invalidate()
     }
 
-    /**
-     * Load world landmass polygons from a JSON array of
-     * {"id":"xx","polygon":[[lon,lat],...]} objects.
-     */
     fun loadWorldLandmass(json: String) {
         worldLandmasses.clear()
         val arr = JSONArray(json)
@@ -208,53 +207,36 @@ class InteractiveMapView @JvmOverloads constructor(
                 val pt = polyArr.getJSONArray(j)
                 points.add(PointF(pt.getDouble(0).toFloat(), pt.getDouble(1).toFloat()))
             }
-            if (points.size >= 3) {
-                worldLandmasses.add(WorldLandmass(points))
-            }
+            if (points.size >= 3) worldLandmasses.add(WorldLandmass(points))
         }
         Log.i(TAG, "Loaded ${worldLandmasses.size} world landmass polygons")
         invalidate()
     }
 
-    /** Set the user's current GPS location; pass null lon/lat to clear. */
     fun setUserLocation(lon: Double, lat: Double) {
-        userLon = lon
-        userLat = lat
-        invalidate()
+        userLon = lon; userLat = lat; invalidate()
     }
 
-    /** Update the download status of a region (redraws the map). */
     fun updateRegionStatus(path: String, status: RegionStatus, progress: Float = 0f) {
-        regionStatusMap[path] = status
+        regionStatusMap[path]   = status
         regionProgressMap[path] = progress
         invalidate()
     }
 
-    /**
-     * For countries with sub-regions, update the parent country status
-     * based on the aggregate status of its sub-region downloads.
-     */
     fun updateParentStatus(parentPath: String, subStatuses: List<RegionStatus>) {
         val status = when {
-            subStatuses.all { it == RegionStatus.COMPLETED } -> RegionStatus.COMPLETED
-            subStatuses.any { it == RegionStatus.DOWNLOADING } -> RegionStatus.DOWNLOADING
-            subStatuses.any { it == RegionStatus.PAUSED } -> RegionStatus.PAUSED
-            subStatuses.any { it == RegionStatus.COMPLETED } -> RegionStatus.COMPLETED
-            subStatuses.any { it == RegionStatus.ERROR } -> RegionStatus.ERROR
+            subStatuses.all { it == RegionStatus.COMPLETED }      -> RegionStatus.COMPLETED
+            subStatuses.any { it == RegionStatus.DOWNLOADING }    -> RegionStatus.DOWNLOADING
+            subStatuses.any { it == RegionStatus.ERROR }          -> RegionStatus.ERROR
+            subStatuses.any { it == RegionStatus.PAUSED }         -> RegionStatus.PAUSED
+            subStatuses.any { it == RegionStatus.COMPLETED }      -> RegionStatus.COMPLETED
             else -> RegionStatus.NOT_DOWNLOADED
         }
         regionStatusMap[parentPath] = status
         invalidate()
     }
 
-    /**
-     * Track the last-tapped region path (no visual highlight change;
-     * drawing is driven by status color only).
-     */
-    fun setSelectedRegion(path: String?) {
-        selectedPath = path
-        // No invalidate needed: selection no longer changes drawing
-    }
+    fun setSelectedRegion(path: String?) { selectedPath = path }
 
     // ── Mercator projection ───────────────────────────────────────────────────
 
@@ -270,18 +252,14 @@ class InteractiveMapView @JvmOverloads constructor(
     private fun latToScreenY(lat: Double): Float =
         (height / 2f - (mercY(lat) - mercY(centerLat)) * zoom).toFloat()
 
-    private fun screenXToLon(x: Float): Double =
-        (x - width / 2f) / zoom + centerLon
-
-    private fun screenYToMerc(y: Float, z: Double = zoom): Double =
-        mercY(centerLat) + (height / 2f - y) / z
+    private fun screenXToLon(x: Float): Double = (x - width / 2f) / zoom + centerLon
 
     private fun screenYToLat(y: Float): Double =
-        inverseMercY(screenYToMerc(y))
+        inverseMercY(mercY(centerLat) + (height / 2f - y) / zoom)
 
     private fun clampViewport() {
         centerLon = centerLon.coerceIn(-180.0, 180.0)
-        centerLat = centerLat.coerceIn(-80.0, 80.0)
+        centerLat = centerLat.coerceIn(-80.0,   80.0)
     }
 
     // ── Drawing ───────────────────────────────────────────────────────────────
@@ -289,35 +267,41 @@ class InteractiveMapView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Ocean background
+        // 1. Ocean
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), oceanPaint)
 
-        // 2. World landmasses (base geography layer)
+        // 2. Landmasses — draw AND build a combined clip path in one pass
+        val landClipPath = Path()
         for (landmass in worldLandmasses) {
-            drawLandmassPolygon(canvas, landmass)
+            val lp = buildScreenPath(landmass.polygon) ?: continue
+            canvas.drawPath(lp, landmassFillPaint)
+            canvas.drawPath(lp, landmassBorderPaint)
+            landClipPath.addPath(lp)
         }
 
-        // 3. Region overlays (semi-transparent status-coloured polygons)
+        // 3. Region overlays — clipped to landmass so nothing bleeds into ocean
+        canvas.save()
+        if (worldLandmasses.isNotEmpty()) {
+            canvas.clipPath(landClipPath)
+        }
         for (region in regions) {
             drawRegionOverlay(canvas, region)
         }
+        canvas.restore()
 
-        // 4. User location dot
-        val uLon = userLon
-        val uLat = userLat
+        // 4. User location
+        val uLon = userLon; val uLat = userLat
         if (uLon != null && uLat != null) {
-            val sx = lonToScreenX(uLon)
-            val sy = latToScreenY(uLat)
-            val radius = 8f
-            canvas.drawCircle(sx, sy, radius, userDotPaint)
-            canvas.drawCircle(sx, sy, radius, userDotBorderPaint)
+            val sx = lonToScreenX(uLon); val sy = latToScreenY(uLat)
+            canvas.drawCircle(sx, sy, 8f, userDotPaint)
+            canvas.drawCircle(sx, sy, 8f, userDotBorderPaint)
         }
     }
 
-    private fun buildPath(polygon: List<PointF>): Path? {
+    private fun buildScreenPath(polygon: List<PointF>): Path? {
         if (polygon.size < 3) return null
         val path = Path()
-        for ((i, pt) in polygon.withIndex()) {
+        polygon.forEachIndexed { i, pt ->
             val sx = lonToScreenX(pt.x.toDouble())
             val sy = latToScreenY(pt.y.toDouble())
             if (i == 0) path.moveTo(sx, sy) else path.lineTo(sx, sy)
@@ -326,37 +310,34 @@ class InteractiveMapView @JvmOverloads constructor(
         return path
     }
 
-    private fun drawLandmassPolygon(canvas: Canvas, landmass: WorldLandmass) {
-        val path = buildPath(landmass.polygon) ?: return
-        canvas.drawPath(path, landmassFillPaint)
-        canvas.drawPath(path, landmassBorderPaint)
-    }
-
     private fun drawRegionOverlay(canvas: Canvas, region: MapRegion) {
         if (region.polygon.size < 3) return
 
-        // Quick off-screen cull
+        // Broad off-screen cull (use generous margin so large regions aren't dropped)
         val cx = lonToScreenX(region.centerLon.toDouble())
         val cy = latToScreenY(region.centerLat.toDouble())
-        val margin = (zoom * 30).toFloat()
+        val margin = max(width, height).toFloat() + (zoom * 20).toFloat()
         if (cx < -margin || cx > width + margin || cy < -margin || cy > height + margin) return
 
-        val path = buildPath(region.polygon) ?: return
-
+        val path = buildScreenPath(region.polygon) ?: return
         val status = regionStatusMap[region.path] ?: RegionStatus.NOT_DOWNLOADED
 
-        regionFillPaint.color = when (status) {
-            RegionStatus.NOT_DOWNLOADED -> colorNotDownloaded
-            RegionStatus.DOWNLOADING   -> colorDownloading
-            RegionStatus.PAUSED        -> colorPaused
-            RegionStatus.COMPLETED     -> colorCompleted
-            RegionStatus.ERROR         -> colorError
+        if (status == RegionStatus.NOT_DOWNLOADED) {
+            // Map fully visible — draw only a thin outline so the user can see
+            // which areas are available for download without covering the land.
+            canvas.drawPath(path, regionOutlinePaint)
+        } else {
+            // Fill + bright border for active/completed/error states
+            regionFillPaint.color = when (status) {
+                RegionStatus.DOWNLOADING -> colorDownloading
+                RegionStatus.PAUSED      -> colorPaused
+                RegionStatus.COMPLETED   -> colorCompleted
+                RegionStatus.ERROR       -> colorError
+                else                     -> colorDownloading
+            }
+            canvas.drawPath(path, regionFillPaint)
+            canvas.drawPath(path, regionActiveBorderPaint)
         }
-
-        canvas.drawPath(path, regionFillPaint)
-
-        val useActiveBorder = status == RegionStatus.DOWNLOADING || status == RegionStatus.COMPLETED
-        canvas.drawPath(path, if (useActiveBorder) regionActiveBorderPaint else regionBorderPaint)
     }
 
     // ── Touch handling ────────────────────────────────────────────────────────
@@ -366,101 +347,90 @@ class InteractiveMapView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                lastTouchX = event.x
-                lastTouchY = event.y
-                touchStartX = event.x
-                touchStartY = event.y
+                lastTouchX  = event.x; lastTouchY  = event.y
+                touchStartX = event.x; touchStartY = event.y
                 hasMoved = false
                 parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
-
             MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount == 1 && !scaleDetector.isInProgress) {
                     val dx = event.x - lastTouchX
                     val dy = event.y - lastTouchY
-
                     if (!hasMoved) {
-                        val totalDx = abs(event.x - touchStartX)
-                        val totalDy = abs(event.y - touchStartY)
-                        if (totalDx > tapThreshold || totalDy > tapThreshold) {
-                            hasMoved = true
-                        }
+                        if (abs(event.x - touchStartX) > tapThreshold ||
+                            abs(event.y - touchStartY) > tapThreshold) hasMoved = true
                     }
-
                     if (hasMoved) {
                         centerLon -= dx / zoom
-                        val mercCenter = mercY(centerLat)
-                        val newMercCenter = mercCenter + dy / zoom
-                        centerLat = inverseMercY(newMercCenter)
+                        centerLat  = inverseMercY(mercY(centerLat) + dy / zoom)
                         clampViewport()
                         invalidate()
                     }
-
-                    lastTouchX = event.x
-                    lastTouchY = event.y
+                    lastTouchX = event.x; lastTouchY = event.y
                 }
                 return true
             }
-
             MotionEvent.ACTION_UP -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                if (!hasMoved && !scaleDetector.isInProgress) {
-                    handleTap(event.x, event.y)
-                }
+                if (!hasMoved && !scaleDetector.isInProgress) handleTap(event.x, event.y)
                 return true
             }
-
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                hasMoved = true
-                return true
-            }
+            MotionEvent.ACTION_POINTER_DOWN -> { hasMoved = true; return true }
         }
         return super.onTouchEvent(event)
     }
 
-    private fun handleTap(x: Float, y: Float) {
-        val tapLon = screenXToLon(x).toFloat()
-        val tapLat = screenYToLat(y).toFloat()
+    /**
+     * Hover events (mouse / stylus) — fire [OnRegionClickListener.onRegionHovered]
+     * so the Activity can show the tooltip without a click.
+     */
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                val lon = screenXToLon(event.x).toFloat()
+                val lat = screenYToLat(event.y).toFloat()
+                val hit = regions.reversed().firstOrNull { pointInPolygon(it.polygon, lon, lat) }
+                onRegionClickListener?.onRegionHovered(hit)
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                onRegionClickListener?.onRegionHovered(null)
+            }
+        }
+        return true   // consume so parent doesn't interfere
+    }
 
-        // Hit-test regions (reverse so frontmost/last-drawn wins)
+    private fun handleTap(x: Float, y: Float) {
+        val lon = screenXToLon(x).toFloat()
+        val lat = screenYToLat(y).toFloat()
         for (region in regions.reversed()) {
-            if (pointInPolygon(region.polygon, tapLon, tapLat)) {
-                selectedPath = region.path
-                tooltipLabel = region.label
-                tooltipX = x
-                tooltipY = y
+            if (pointInPolygon(region.polygon, lon, lat)) {
+                selectedPath  = region.path
+                tooltipLabel  = region.label
+                tooltipX = x; tooltipY = y
                 invalidate()
                 onRegionClickListener?.onRegionClicked(region)
                 return
             }
         }
-
-        // Tapped empty area
-        selectedPath = null
-        tooltipLabel = null
+        selectedPath = null; tooltipLabel = null
         invalidate()
         onRegionClickListener?.onEmptyTapped()
     }
 
-    /** Ray-casting point-in-polygon test. */
+    /** Ray-casting point-in-polygon (geo coordinates, not screen). */
     private fun pointInPolygon(polygon: List<PointF>, x: Float, y: Float): Boolean {
         var inside = false
         var j = polygon.size - 1
         for (i in polygon.indices) {
             val xi = polygon[i].x; val yi = polygon[i].y
             val xj = polygon[j].x; val yj = polygon[j].y
-            if ((yi > y) != (yj > y) &&
-                x < (xj - xi) * (y - yi) / (yj - yi) + xi
-            ) {
+            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi)
                 inside = !inside
-            }
             j = i
         }
         return inside
     }
 
-    companion object {
-        private const val TAG = "NDKarte.MapView"
-    }
+    companion object { private const val TAG = "NDKarte.MapView" }
 }

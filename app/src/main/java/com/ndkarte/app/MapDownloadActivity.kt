@@ -81,12 +81,17 @@ class MapDownloadActivity : Activity() {
         mapView.onRegionClickListener = object : InteractiveMapView.OnRegionClickListener {
             override fun onRegionClicked(region: InteractiveMapView.MapRegion?) {
                 if (region == null || region.path.isEmpty()) return
-                showTooltip(region.label)
-                if (region.hasSubRegions) showSubRegionDialog(region)
-                else showActionDialog(region.path, region.label, null)
+                // Show tooltip on tap too (fallback for touch devices without hover)
+                showTooltipTimed(region.label)
+                showActionDialog(region.path, region.label, null)
             }
             override fun onEmptyTapped() {
-                tvTooltip.visibility = View.GONE
+                dismissTooltip()
+            }
+            override fun onRegionHovered(region: InteractiveMapView.MapRegion?) {
+                // Mouse/stylus hover: show tooltip immediately, no auto-hide timer
+                if (region != null) showTooltipPersistent(region.label)
+                else dismissTooltip()
             }
         }
 
@@ -102,11 +107,24 @@ class MapDownloadActivity : Activity() {
 
     // ── Tooltip ───────────────────────────────────────────────────────────────
 
-    private fun showTooltip(label: String) {
+    /** Show tooltip and auto-hide after 3 s (used on tap for touch devices). */
+    private fun showTooltipTimed(label: String) {
         uiHandler.removeCallbacks(hideTooltipRunnable)
         tvTooltip.text = label
         tvTooltip.visibility = View.VISIBLE
         uiHandler.postDelayed(hideTooltipRunnable, 3_000L)
+    }
+
+    /** Show tooltip and keep it visible until [dismissTooltip] is called (used on hover). */
+    private fun showTooltipPersistent(label: String) {
+        uiHandler.removeCallbacks(hideTooltipRunnable)
+        tvTooltip.text = label
+        tvTooltip.visibility = View.VISIBLE
+    }
+
+    private fun dismissTooltip() {
+        uiHandler.removeCallbacks(hideTooltipRunnable)
+        tvTooltip.visibility = View.GONE
     }
 
     // ── GPS location ──────────────────────────────────────────────────────────
@@ -164,51 +182,6 @@ class MapDownloadActivity : Activity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to restore download states", e)
-        }
-    }
-
-    // ── Sub-region dialog ─────────────────────────────────────────────────────
-
-    private fun showSubRegionDialog(parentRegion: InteractiveMapView.MapRegion) {
-        val continent = parentRegion.path.split("/").firstOrNull() ?: return
-
-        ioExecutor.execute {
-            val allRegions = try {
-                downloadManager.fetchRegions(continent)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch regions for $continent", e)
-                emptyList()
-            }
-
-            val children = allRegions.filter { entry ->
-                entry.path.startsWith(parentRegion.path + "/") || entry.path == parentRegion.path
-            }
-
-            runOnUiThread {
-                if (children.isEmpty()) return@runOnUiThread
-
-                val labels = children.map { entry ->
-                    val state = downloadManager.getState(entry)
-                    val badge = when (state.status) {
-                        MapDownloadManager.DownloadStatus.COMPLETED   -> "  ✓"
-                        MapDownloadManager.DownloadStatus.IN_PROGRESS -> "  ↓"
-                        MapDownloadManager.DownloadStatus.ERROR       -> "  ⚠"
-                        MapDownloadManager.DownloadStatus.PAUSED,
-                        MapDownloadManager.DownloadStatus.PARTIAL     -> "  ⏸"
-                        else -> ""
-                    }
-                    entry.displayName + badge
-                }.toTypedArray()
-
-                AlertDialog.Builder(this)
-                    .setTitle(parentRegion.label)
-                    .setItems(labels) { _, idx ->
-                        val entry = children[idx]
-                        showActionDialog(entry.path, entry.displayName, entry)
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
         }
     }
 
